@@ -39,6 +39,11 @@ body{background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-se
 .info .x{position:absolute;top:6px;right:6px;min-height:32px;width:32px;padding:0;font-size:18px;line-height:1}
 .info .go{margin-top:8px;min-height:34px}
 .info .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.info .acts button{min-height:34px}
+.info .fill{margin-top:8px;padding-top:6px;border-top:1px solid #2a3350}.info .fill h4{margin:0 0 4px;font:600 13.5px/1.2 "Chakra Petch",sans-serif;color:var(--acc)}
+.info .slots{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:6px;max-width:220px}.info .slots i{height:22px;border:1px solid #3a4466;border-radius:3px;font:600 10px/20px monospace;text-align:center;font-style:normal;color:#9aa}.info .slots i.on{background:#21304d;border-color:var(--acc);color:#e8f6ff}
+.fillt{width:100%;border-collapse:collapse;font-size:12.5px}.fillt th,.fillt td{border-top:1px solid #2a3350;padding:3px 4px;text-align:left;vertical-align:top}.fillt td:first-child{color:var(--dim);white-space:nowrap}
+.info .small{margin:2px 0 0;font-size:12px;color:var(--dim)}
+.info{max-height:calc(100% - 60px);overflow:auto}
 .unhide{position:absolute;left:16px;bottom:64px;min-height:34px}
 .side{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:14px 16px 28px}
 .sec{margin-bottom:18px}
@@ -516,11 +521,54 @@ const AE_ROLE = {
   'Wireless Connector → Mainnet':'Белый коннектор: Output Bus (ME) узла сдаёт результат в основную сеть.'};
 const AE_COMP = {'Adapter → me_interface (копии паттернов)':'me_interface', 'Adapter → me_interface (Input)':'me_interface', 'Adapter → me_controller (наниты)':'me_controller', 'Transposer':'transposer', 'Redstone I/O':'redstone'};
 function ovlMat(base, ovl){ const k = 'ovl'+base+ovl; return matCache[k] || (matCache[k] = new THREE.MeshLambertMaterial({map:mkTex(composite(base, [[ovl]]))})); }
+// ---------- что вставить / как настроить (Armisael5/gtnh-bec-controller + DESIGN.md) ----------
+// rows: [что, значение]; slots: ячейки в ЭТОМ диске {n, of, label}
+const SUPER = ['Карты', '3× Superluminal Acceleration Card'], IOMODE = ['Режим', 'Move to output when cell/network is empty'];
+function FILL(name, sub, w){
+  const P = sub.startsWith('Pending'), I = sub.startsWith('Input'), E = sub.startsWith('Подсеть энтанглера'), N = sub.startsWith('Наниты');
+  switch (name) {
+    case 'Dual Interface (mainnet)': return {rows:[['Паттерны', 'паттерны BEC — умноженные (вход: исходные жидкости и предметы, выход: продукт узла)'], ['Карты', 'Blocking Card'], ['Режим', 'Smart Blocking вкл.'], ['Сторона', 'ключом развернуть в Pending']]};
+    case 'Dual Interface (копия)': return {rows:[['Паттерны', 'те же паттерны в тех же слотах, но НЕ умноженные (×1); удобно копировать Matter Manipulator'], ['Сеть', 'не подключать к AE — рядом только адаптер OC'], ['Правило', 'новый паттерн — в оба интерфейса']]};
+    case 'ME Drive (сырьё)': return {rows:[['Ячейки', 'обычные ячейки основной сети: расплавы, DSS, предметы рецептов']]};
+    case 'Machine Hull': return {rows:[['Крышка', 'Machine Controller Cover'], ['Конвейеры', 'Conveyor Module UEV на стороны к IO Port; Export, Conditional вкл.; сверху/снизу — Input Blocking, по бокам — Output Blocking (скрин conveyors.png у Armisael5)']]};
+    case 'Hull + Item Detector (storage bus Input)': return {rows:[['Storage bus', 'от Input-подсети: Bidirectional, приоритет 1000'], ['Крышка', 'Item Detector Cover лицом в Redstone I/O']]};
+    case 'ME Interface': return {rows:[['Содержимое', 'ничего. Обычный (не Dual) интерфейс: через адаптер программа видит, что пришло в Input']]};
+    case 'Fluid Storage Bus (Insert Only)': return {rows:[['Режим', 'Insert Only'], ['Связь', 'беспроводной коннектор от Pending: жидкости из паттерна уходят сюда']]};
+    case 'P2P Dual Interface + Fake Crafting Card': return {rows:[['Карты', 'Fake Crafting Card'], ['Режим', 'обычный Blocking (не Smart)'], ['Паттерны', '10 шт. «нанит → нанит» для 10 нанитов BEC; выход переименован в номер тира: «1» … «10», вход не переименовывать'], ['Размер', 'нанитов этого тира / число Матриц: 30 720 при одной Матрице']]};
+    case 'Crafting Storage': return {rows:[['Назначение', 'CPU для фейкового крафта нанитов; хватит любого объёма']]};
+    case 'Co-Processor': return {rows:[['Назначение', 'вместе с Crafting Storage — CPU подсети нанитов']]};
+    case 'Wireless Connector + Storage Bus (двусторонний)': return {rows:[['Storage bus', 'Bidirectional на Nanite Containment Bus Матрицы']]};
+    case 'ME IO Port': {
+      if (P) return {rows:[SUPER, IOMODE].concat(w[1] > 0 ? [['Ячейка', '16384k Item Cell (для крафтов Врат — Artificial Universe cell: предметов больше)']] : []).concat([['Направление', 'как на скрине input_ioports.png у Armisael5']])};
+      if (N) return {rows:[SUPER].concat(w[1] > 0 ? [['Ячейка', 'любая пустая ячейка-пустышка — обязательно (Armisael5: «This is important»)']] : [['Ячейка', 'ячейку с нанитами двигает Transposer']])};
+      return {rows:[SUPER, IOMODE]};
+    }
+    case 'ME Drive': {
+      if (P) return {rows:[['Ячейки', 'Item Digital Singularity: 16 на два диска']], slots:{n:8, of:10, label:'IDS'}};
+      if (I) return {rows:[['Ячейки', 'Item Digital Singularity: 20 на два диска']], slots:{n:10, of:10, label:'IDS'}};
+      if (E) return {rows:[['Ячейки', 'Fluid Digital Singularity: 20 на два диска'], ['Сюда', 'жидкости из паттернов и запас (passive) — порциями, DESIGN §1.2a']], slots:{n:10, of:10, label:'FDS'}};
+      if (N) return {rows:[['Ячейка', '1× 16384k Item Cell'], ['Partition', '10 нанитов BEC (Carbon … MagMatter)'], ['Карта', 'Equal Distribution Card'], ['Types', '10'], ['Resource Amount', '307 200 × число Матриц'], ['Потом', 'наниты просто кидать в эту подсеть']], slots:{n:1, of:10, label:'16M'}};
+    }
+  }
+  return null;
+}
+// для шлюзов мультиблоков
+const FILL_SP = {
+  inbus:{rows:[['Настройка', 'включить авто-пополнение (stocking), refresh 5 тиков'], ['Связь', 'пурпурный коннектор → хаб Input']]},
+  outbus:{rows:[['Связь', 'белый коннектор → хаб основной сети']]},
+  ctrlhatch:{rows:[['Режим', 'Pause → Pause Immediately (по умолчанию так)'], ['Схема', 'не класть: она задаёт режим Parallel']]},
+  nanite:{rows:[['Содержимое', 'вручную ничего — наниты приходят через двусторонний storage bus подсети нанитов']]},
+  inhatch:{rows:[['Связь', 'подсеть энтанглера: 2 ME Drive + Fluid Storage Bus Insert Only'], ['Важно', 'основную сеть не подключать — энтанглер запутает всё, что видит']]}};
+function fillHTML(f, esc){
+  if (!f) return '';
+  const grid = f.slots ? `<div class="slots" title="ячейки в этом диске">${Array.from({length:f.slots.of}, (_, i) => `<i class="${i < f.slots.n ? 'on' : ''}">${i < f.slots.n ? esc(f.slots.label) : ''}</i>`).join('')}</div><p class="small">в этот диск: ${f.slots.n} из ${f.slots.of}</p>` : '';
+  return `<div class="fill"><h4>Что вставить и как настроить</h4><dl>${f.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${grid}</div>`;
+}
 function aeBox(w, side, top, front, dir, name){
   const mm = n => typeof n === 'string' ? ocMat(n) : n;
   const mats = ['px','nx','py','ny','pz','nz'].map(f => mm(f === dir && front ? front : (f === 'py' || f === 'ny') ? (top || side) : side));
   const m = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mats); m.position.set(w[0]+.5, w[1]+.5, w[2]+.5);
-  aeGroup.add(m); AE_BLOCKS.push({w, name}); m.userData = {pick:true, w, info:{t:name, what:AE_ROLE[name] || '', rows:[['Подсеть AE2', AE_SUB]].concat(AE_COMP[name] ? [['Компонент OC', AE_COMP[name]]] : [])}}; return m;
+  aeGroup.add(m); AE_BLOCKS.push({w, name}); m.userData = {pick:true, w, info:{t:name, what:AE_ROLE[name] || '', rows:[['Подсеть AE2', AE_SUB]].concat(AE_COMP[name] ? [['Компонент OC', AE_COMP[name]]] : []), fill:FILL(name, AE_SUB, w)}}; return m;
 }
 // P2P-туннель — деталь (part) на ME-кабеле: ядро кабеля + пластина на грани face (к адаптеру/кабелю OC),
 // хвост кабеля в сторону tail (к коннектору/подсети)
@@ -739,6 +787,22 @@ const STEPS = [
   {t:'AE2 · Input → узлы', show:'all', cam:()=>[[-10,8,4], 70, [.55,.5,.75]], note:()=>`<p><b>Input</b> (пурпурная): ME Controller, обычный (не Dual) ME Interface + адаптер, 2 ME Drive, 4 беспроводных хаба для узлов + 1 хаб для OC P2P к затвору, полю, энтанглеру, Матрице.</p><p>На каждом узле: пурпурный коннектор → <b>Advanced Stocking Input Bus</b> (включить, refresh 5 тиков), белый коннектор → <b>Output Bus (ME)</b> в Mainnet. Коннекторы узлов делить поровну между 4 хабами.</p><p>Корпус со storage bus на Input (высокий приоритет) и Item Detector cover → Redstone I/O: сигнал «ячейка пуста».</p>`},
   {t:'AE2 · подсеть энтанглера', show:'all', cam:()=>[add3(AE_POS.ent,[0,-1,0]), 28, [.6,.5,.7]], note:()=>`<p>На энтанглере — Advanced Stocking Input Hatch. Отдельная маленькая подсеть: 2 ME Drive (жидкостные ячейки) + Fluid Storage Bus <b>Insert Only</b>, к ней — беспроводной коннектор от Pending: жидкости из паттерна сразу уходят сюда.</p><p>Основная сеть сюда <b>не подключается</b>: энтанглер запутает всё, что видит. Запас (passive) — класть в эту подсеть порциями (DESIGN.md §1.2a).</p>`},
   {t:'AE2 · наниты', show:'all', cam:()=>[[-14,1,9], 26, [.45,.55,.75]], note:()=>`<p><b>Наниты</b> (бирюзовая, свой цвет кабеля!): Neutronium ME Controller + адаптер, 2 IO Port с Transposer между ними, ME Drive с ячейкой: фильтр на 10 нанитов BEC, Equal Distribution Card, Types = 10, объём = 307 200 × число Матриц. Crafting Storage + Co-Processor, Energy Anchor.</p><p>P2P <b>Dual</b> Interface (обычный Blocking, не Smart) + Fake Crafting Card, 10 паттернов «нанит → нанит», выход переименован в номер тира («1»…«10»), размер паттерна = нанитов этого тира / число Матриц (30 720 для одной).</p><p>Беспроводной коннектор → <b>двусторонний storage bus на Nanite Containment Bus</b> Матрицы; сверху — storage bus Extract Only к IO Port.</p>`},
+  {t:'AE2 · что куда вставить', show:'all', cam:()=>[[-24,1,9], 30, [.3,.6,.75]], note:()=>`<table class="fillt"><tr><th>Где</th><th>Что</th></tr>
+<tr><td>Mainnet · Dual Interface</td><td>паттерны BEC <b>умноженные</b>; Blocking Card + Smart Blocking; ключом в Pending</td></tr>
+<tr><td>Копии · Dual Interface (не в сети)</td><td>те же паттерны <b>×1</b> в тех же слотах; рядом адаптер</td></tr>
+<tr><td>Pending · 2 ME Drive</td><td>16 × Item Digital Singularity</td></tr>
+<tr><td>Pending · 2 IO Port</td><td>по 3 × Superluminal Acceleration Card, «Move to output when cell/network is empty»; в верхний — ячейка 16384k (для Врат — Artificial Universe)</td></tr>
+<tr><td>Pending · 2 Machine Hull</td><td>Machine Controller Cover; Conveyor Module UEV к IO Port (Conditional; верх/низ Input Blocking, бока Output Blocking)</td></tr>
+<tr><td>Input · ME Interface</td><td>пустой, обычный (не Dual); рядом адаптер</td></tr>
+<tr><td>Input · 2 ME Drive</td><td>20 × Item Digital Singularity</td></tr>
+<tr><td>Input · корпус</td><td>storage bus Bidirectional, приоритет 1000; Item Detector Cover → Redstone I/O</td></tr>
+<tr><td>Энтанглер · 2 ME Drive</td><td>20 × Fluid Digital Singularity; storage bus Insert Only</td></tr>
+<tr><td>Наниты · ME Drive</td><td>1 × 16384k Item Cell: partition 10 нанитов BEC, Equal Distribution Card, Types 10, Resource Amount 307 200 × Матриц</td></tr>
+<tr><td>Наниты · 2 IO Port</td><td>по 3 × Superluminal; в верхний — пустая ячейка-пустышка (обязательно)</td></tr>
+<tr><td>Наниты · P2P Dual Interface</td><td>Fake Crafting Card, обычный Blocking; 10 паттернов «нанит → нанит», выход переименован «1»…«10», размер 30 720 / Матриц</td></tr>
+<tr><td>Наниты · CPU</td><td>Crafting Storage + Co-Processor</td></tr>
+<tr><td>Узел · Advanced Stocking Input Bus</td><td>авто-пополнение, refresh 5 тиков</td></tr>
+<tr><td>Узел · люк контроллера</td><td>Pause Immediately (по умолчанию), без схемы</td></tr></table><p class="small">Кликни по блоку — то же в его карточке; у дисков показаны слоты. Источник — Armisael5/gtnh-bec-controller.</p>`}
 ];
 function nodeNote(side, gi){ const n = Math.max(0, Math.min(4, K - gi*4)); if (!n) return `<p>Здесь узлов нет: выбрано ${K} узл. Узлы ставятся по порядку: спереди → сзади → сверху → снизу.</p>`; return `<p>Узел телепортации 7×23×13 — здесь ${n} шт., ${side}</p><p>Люк LoS — сзади посередине, повернуть ключом лицом к люку Матрицы. Расстояние здесь ${G} блоков (максимум 128), между люками — только прозрачные блоки: непрозрачный блок рвёт луч, незагруженный чанк — тоже.</p><p>На корпуса узла: Advanced Stocking Input Bus, выходная шина, Люк контроллера узла (только режим «пауза», не «параллели»).</p>${caseList('BEC_IO_NODE')}`; }
 
@@ -1169,7 +1233,7 @@ function mbInfo(p, w){
   if (sp) what = KIND[sp.k](p, l, w);
   else { const base = CASE[c] ? c : SLOTCASE[p.st][c]; what = CASE_RU[base]; if (c === HATCHCHAR[p.st]) what += ' · можно заменить шлюзом: '+SLOTS[p.st]; }
   const stepI = STEPS.findIndex(s => s.st === p.id || (p.grp != null && s.grp === p.grp));
-  return {t:p.title, what, rows:[['Слой от фасада', (l[2]+1)+' из '+gr.D], ['Локально (x, y↑, z)', l.join(', ')], ['Размер', gr.W+'×'+gr.H+'×'+gr.D]], step:stepI};
+  return {t:p.title, what, fill:sp ? FILL_SP[sp.k] : null, rows:[['Слой от фасада', (l[2]+1)+' из '+gr.D], ['Локально (x, y↑, z)', l.join(', ')], ['Размер', gr.W+'×'+gr.H+'×'+gr.D]], step:stepI};
 }
 const selBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.06, 1.06, 1.06)), new THREE.LineBasicMaterial({color:0xffe14f}));
 selBox.visible = false; scene.add(selBox);
@@ -1192,7 +1256,7 @@ function pick(cx, cy){
 const near = (p, w) => Math.abs(p[0]-w[0]-.5) <= .6 && Math.abs(p[1]-w[1]-.5) <= .6 && Math.abs(p[2]-w[2]-.5) <= .6;
 function showInfo(info, w){
   const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  $('infoBody').innerHTML = `<h3>${esc(info.t)}</h3>${info.what ? `<p class="what">${esc(info.what)}</p>` : ''}<dl>${(info.rows||[]).concat([['Мир (x, y, z)', w.join(', ')]]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl><div class="acts">${info.step >= 0 ? `<button class="go" id="infoGo">Шаг постройки ${info.step} →</button>` : ''}${SEL ? `<button id="infoHide">Скрыть блок</button>` : ''}${SEL && SEL.pl ? `<button id="infoHidePl">Скрыть мультиблок</button>` : ''}</div>`;
+  $('infoBody').innerHTML = `<h3>${esc(info.t)}</h3>${info.what ? `<p class="what">${esc(info.what)}</p>` : ''}<dl>${(info.rows||[]).concat([['Мир (x, y, z)', w.join(', ')]]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${fillHTML(info.fill, esc)}<div class="acts">${info.step >= 0 ? `<button class="go" id="infoGo">Шаг постройки ${info.step} →</button>` : ''}${SEL ? `<button id="infoHide">Скрыть блок</button>` : ''}${SEL && SEL.pl ? `<button id="infoHidePl">Скрыть мультиблок</button>` : ''}</div>`;
   $('info').hidden = false;
   if ($('infoGo')) $('infoGo').onclick = () => setStep(info.step);
   if ($('infoHide')) $('infoHide').onclick = hideSel;

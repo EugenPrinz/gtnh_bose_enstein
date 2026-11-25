@@ -2,6 +2,14 @@
 
 ## Не выпущено
 
+### 2026-11-25 — что вставлять в диски и интерфейсы
+- Карточка блока AE2 — раздел «Что вставить и как настроить»: ячейки ME Drive по подсетям (Pending 16 IDS,
+  Input 20 IDS, энтанглер 20 FDS, наниты 1×16384k с partition/Equal Distribution/Types 10/Resource Amount)
+  со слотами диска; паттерны, карты и режимы Dual Interface (умноженные / ×1 копии), P2P Dual Interface нанитов,
+  ME Interface, IO Port (карты, режим, 16384k / пустышка), корпуса (крышки, конвейеры), storage bus.
+- То же для шлюзов мультиблоков: Advanced Stocking Input Bus, Output Bus, люк контроллера, Nanite Bus, вход энтанглера.
+- Новый шаг «AE2 · что куда вставить» — сводная таблица. Источник — Armisael5/gtnh-bec-controller.
+
 ### 2026-11-25 — люк контроллера узла
 - DESIGN §1.5: `setWorkAllowed(false)` на узле не останавливает идущий рецепт (пустой `notAllowedToWork_stopMachine_EM`);
   `PAUSE_INSTANT` — единственная мгновенная заморозка, и она срабатывает до проверки загрязнителей.
