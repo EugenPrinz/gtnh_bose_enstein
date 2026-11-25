@@ -1,0 +1,5 @@
+tools/build3d/structs.json
+tools/build3d/specials.json
+tools/build3d/condensates.json
+tools/build3d/recipes_all.json
+__pycache__/

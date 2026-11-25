@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Линия BEC — постройка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE  технический стенд, как схема DRC: постройка линии BEC + живая модель её работы
+   IDEA   площадка в Minecraft ночью, рядом пульт программы BEC: шаги, слои, проверки, модель
+   PICTURE сами мультиблоки GT5U 1:1 по StructureDefinition, кондуиты двух сетей, лучи LoS к 16 узлам
+   COLOUR ночь #0a0d14, конденсат голубой #4fd8ff, левая сеть оранжевая #ff9a3c, правая синяя #5b8cff
+   TYPE   Chakra Petch (заголовки, цифры) + Inter (текст)
+   LAYOUT ноутбук: сцена слева, пульт 390px справа; телефон: сцена 56% высоты, пульт ниже */
+:root{color-scheme:dark;--bg:#0a0d14;--panel:#111622;--panel2:#161c2b;--line:#263049;--ink:#e6eaf2;--dim:#8d97ab;--acc:#4fd8ff;--left:#ff9a3c;--right:#5b8cff;--ok:#43d17a;--warn:#ffc24a;--bad:#ff4f4f}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow:hidden}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 390px;height:100%}
+.stage{position:relative;overflow:hidden}
+.stage canvas{display:block;width:100%;height:100%}
+.labels{position:absolute;inset:0;pointer-events:none}
+.lbl{position:absolute;transform:translate(-50%,-130%);white-space:nowrap;font:600 12px/1.2 Inter,sans-serif;padding:3px 7px;border-radius:4px;background:rgba(10,13,20,.82);border:1px solid var(--line);color:var(--ink)}
+.lbl.cur{border-color:var(--acc);color:#fff;font-size:13px}
+.lbl.L{border-color:var(--left)}.lbl.R{border-color:var(--right)}
+.hud{position:absolute;left:16px;top:14px;right:16px;pointer-events:none}
+.hud h1{margin:0;font:700 26px/1.05 "Chakra Petch",sans-serif;letter-spacing:-.01em}
+.hud .sub{color:var(--dim);font-size:13px;margin-top:4px}
+.legend{position:absolute;left:16px;bottom:14px;display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);pointer-events:none}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font:600 15px Inter}
+.side{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:14px 16px 28px}
+.sec{margin-bottom:18px}
+.sec h2{font:600 16px/1.2 "Chakra Petch",sans-serif;margin:0 0 8px;color:var(--acc)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button,select{font:600 14px Inter,sans-serif;color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:6px;min-height:40px;padding:0 12px;cursor:pointer}
+select{font-weight:500;width:100%}
+button:hover{border-color:#3d4a6a}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button.on{background:#10283a;border-color:var(--acc);color:#cdf3ff}
+button.go{background:#163a25;border-color:#2b6b45}
+button.stop{background:#3a1616;border-color:#7a2b2b}
+button.warnb.on{background:#3a2a10;border-color:var(--warn);color:#ffe2a8}
+.steps{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:2px}
+.steps li{display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;color:var(--dim)}
+.steps li b{font:600 13px "Chakra Petch",sans-serif;color:var(--dim);text-align:right}
+.steps li.done{color:var(--ink)}
+.steps li.cur{background:var(--panel2);color:#fff;outline:1px solid var(--acc)}
+.steps li.cur b{color:var(--acc)}
+.note{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px}
+.note p{margin:0 0 6px}.note p:last-child{margin:0}
+.note ul{margin:4px 0 6px;padding-left:18px}.note li{margin:1px 0}
+.slider{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center}
+input[type=range]{width:100%;accent-color:var(--acc);height:28px}
+.big{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.cell{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.cell span{display:block;color:var(--dim);font-size:12px}
+.cell strong{font:600 19px/1.2 "Chakra Petch",sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.bars{display:grid;gap:4px;font-size:12.5px}
+.bars div{display:grid;grid-template-columns:96px minmax(0,1fr) 74px;gap:8px;align-items:center}
+.bars em{font-style:normal;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bars b{font-weight:500;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar{height:6px;background:#0c1019;border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;width:0}
+.nodes{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
+.nd{background:#0c1019;border:1px solid var(--line);border-radius:4px;height:34px;position:relative;overflow:hidden;font:600 11px "Chakra Petch";color:var(--dim);display:grid;place-items:center}
+.nd i{position:absolute;left:0;bottom:0;height:100%;width:0;background:rgba(79,216,255,.22)}
+.nd span{position:relative}
+.nd.run{border-color:var(--acc);color:#fff}.nd.wait{border-color:var(--warn);color:var(--warn)}.nd.bad{border-color:var(--bad);color:var(--bad)}.nd.off{opacity:.35}
+.chip{display:inline-block;font:600 13px "Chakra Petch",sans-serif;padding:3px 10px;border-radius:4px;background:#26314a}
+.checks{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:13.5px}
+.checks li{display:grid;grid-template-columns:18px minmax(0,1fr);gap:6px}
+.checks .y{color:var(--ok)}.checks .n{color:var(--bad)}
+.log{font-size:12.5px;color:var(--dim);max-height:140px;overflow-y:auto;margin-top:8px}
+.log .e{color:var(--bad)}.log .w{color:var(--warn)}.log .g{color:var(--ok)}
+.small{font-size:12.5px;color:var(--dim)}
+kbd{font:12px Inter;background:#1d2536;border:1px solid var(--line);border-radius:3px;padding:0 4px}
+@media(max-width:820px){
+  body{overflow:auto}
+  .app{grid-template-columns:minmax(0,1fr);height:auto}
+  .stage{height:56svh}
+  .side{border-left:0;border-top:1px solid var(--line)}
+  .hud h1{font-size:20px}
+  .legend{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage" id="stage">
+    <div class="labels" id="labels"></div>
+    <div class="hud"><h1>Линия BEC</h1><div class="sub">Постройка и модель работы · GTNH 2.9.1 (GT5U 5.09.54.275) · программа BEC 0.0 (дизайн)</div></div>
+    <div class="legend"><span><i style="background:var(--left)"></i>левая сеть (хранение)</span><span><i style="background:var(--right)"></i>правая сеть (сборка)</span><span><i style="background:var(--acc)"></i>луч LoS</span><span><i style="background:#d24fd8"></i>AE2 Input</span><span><i style="background:#3fd0d0"></i>AE2 наниты</span><span>ЛКМ — вращать, ПКМ — сдвиг, колесо — зум</span></div>
+    <div class="loading" id="loading">Собираю 22 тысячи блоков…</div>
+  </div>
+  <aside class="side">
+    <div class="sec">
+      <h2>Постройка</h2>
+      <ol class="steps" id="steps"></ol>
+      <div class="note" id="stepNote"></div>
+      <div class="row" style="margin-top:10px"><button id="prev">← Назад</button><button id="next">Дальше →</button><button id="all">Всё сразу</button></div>
+      <div class="row" style="margin-top:8px"><button id="slots">Места шлюзов</button><button id="tags" class="on">Подписи</button></div>
+      <div id="layerBox" style="margin-top:10px">
+        <div class="slider"><span class="small">Слой</span><input type="range" id="layer" min="0" max="0" value="0" aria-label="Слой от фасада"><span class="small" id="layerV">все</span></div>
+        <div class="small" id="layerNote"></div>
+      </div>
+    </div>
+    <div class="sec">
+      <h2>Модель работы</h2>
+      <div class="row" id="presets" style="margin-bottom:6px"></div>
+      <div class="small" id="prNote" style="margin-bottom:8px"></div>
+      <label class="small" for="recipe">Рецепт (BECRecipes / BECMetaMaterialRecipes, 2.9.1)</label>
+      <select id="recipe" style="margin:4px 0 8px"></select>
+      <div class="slider"><span class="small">Копий</span><input type="range" id="copies" min="1" max="64" value="16" aria-label="Копий рецепта в партии"><span class="small" id="copiesV">16</span></div>
+      <div class="slider"><span class="small">Узлов</span><input type="range" id="nodesN" min="1" max="16" value="16" aria-label="Узлов телепортации: строим и считаем"><span class="small" id="nodesV">16</span></div>
+      <div class="slider"><span class="small">Нанитов</span><input type="range" id="nan" min="0" max="100" value="60" aria-label="Нанитов каждого тира"><span class="small" id="nanV">1</span></div>
+      <div class="slider"><span class="small">Тиры до</span><input type="range" id="tmax" min="1" max="10" value="10" aria-label="Самый высокий тир нанитов в наличии"><span class="small" id="tmaxV">10</span></div>
+      <div class="slider"><span class="small">Энтанглер</span><input type="range" id="ent" min="0" max="100" value="50" aria-label="Питание энтанглера, EU/t"><span class="small" id="entV"></span></div>
+      <div class="slider"><span class="small">Матрица</span><input type="range" id="mx" min="0" max="100" value="60" aria-label="Питание Матрицы наблюдения, EU/t"><span class="small" id="mxV"></span></div>
+      <div class="row" style="margin:6px 0"><span class="small">Наниты</span><button data-st="auto" class="on">Авто</button><button data-st="const">Один тир</button><button data-st="swap">По шагам</button></div>
+      <div class="row" style="margin:6px 0"><span class="small">Энтанглер</span><button data-em="auto" class="on">Авто</button><button data-em="all">Все сразу</button><button data-em="group">По длительности</button></div>
+      <div class="small" id="est"></div>
+      <div class="row" style="margin-top:10px"><button class="go" id="bOrder">Заказ из ME</button><button id="bStock">Залить запас</button><button class="stop" id="bReset">Сброс</button></div>
+      <div class="row" style="margin-top:8px"><span class="small">Скорость</span><button data-sp="1">×1</button><button data-sp="20" class="on">×20</button><button data-sp="200">×200</button><button data-sp="2000">×2000</button><button data-sp="20000">×20000</button></div>
+      <div class="small" style="margin:10px 0 4px">Сбои — включи и смотри, что будет:</div>
+      <div class="row"><button class="warnb" id="fFilter">Фильтр затвора не настроен</button><button class="warnb" id="fChecks">Проверки программы выкл.</button></div>
+      <div class="row" style="margin-top:6px"><span class="small">Чужие конденсаты</span><button data-fo="0">0</button><button data-fo="2">2</button><button data-fo="4" class="on">4</button></div>
+      <div class="row" style="margin-top:6px"><button class="warnb" id="fField">Обрыв питания поля</button><button class="warnb" id="fArray">Обрыв питания Матрицы</button></div>
+      <div class="big" style="margin-top:10px">
+        <div class="cell"><span>Фаза программы</span><strong id="vPh">IDLE</strong></div>
+        <div class="cell"><span>Тир нанитов: нужен / подан</span><strong id="vT">—</strong></div>
+        <div class="cell"><span>Загрязнители</span><strong id="vC">0</strong></div>
+        <div class="cell"><span>Готово / потеряно</span><strong id="vD">0 / 0</strong></div>
+        <div class="cell"><span>Время партии</span><strong id="vTm">—</strong></div>
+        <div class="cell"><span>EU/t линии</span><strong id="vE">0</strong></div>
+      </div>
+      <div class="small" style="margin:10px 0 4px">IO Node (узлы телепортации)</div>
+      <div class="nodes" id="nodes"></div>
+      <div class="small" style="margin:10px 0 4px" id="fieldHead">Поле удержания</div>
+      <div class="bars" id="fieldBars"></div>
+      <div class="small" style="margin:10px 0 4px">Потоки AE2</div>
+      <ul class="checks" id="aeFlows"></ul>
+      <div class="log" id="log"></div>
+    </div>
+    <div class="sec">
+      <h2>Проверка схемы</h2>
+      <ul class="checks" id="checks"></ul>
+    </div>
+    <p class="small">Формы мультиблоков — <kbd>BECStructureDefinitions</kbd> и <kbd>Casings</kbd> из GT5-Unofficial 5.09.54.275 (GTNH 2.9.1), текстуры — из ресурсов GT5U и OpenComputers. Скорость узла — <kbd>MTEBECIONode.incrementProgressTime</kbd>: прогресс += N / (P · 2^Δтир · max(загрязн.+1, делитель)). Рецепты — <kbd>BECRecipes.java</kbd>. Энтанглер в модели условный.</p>
+  </aside>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+{
+const S = __STRUCTS__;
+const SPEC = __SPEC__;
+const TEX = __TEX__;
+const ANIM = __ANIM__;
+const $ = id => document.getElementById(id);
+const fmt = n => n >= 1e12 ? (n/1e12).toFixed(2)+' трлн' : n >= 1e9 ? (n/1e9).toFixed(2)+' млрд' : n >= 1e6 ? (n/1e6).toFixed(1)+' млн' : n >= 1e4 ? Math.round(n/1e3)+' тыс' : String(Math.round(n));
+const fmtT = t => { t = Math.max(0, t/20); if (t < 1) return (t*20).toFixed(0)+' тик'; if (t < 120) return t.toFixed(1)+' с'; const m = Math.floor(t/60); return m < 120 ? m+' мин '+Math.round(t%60)+' с' : (m/60).toFixed(1)+' ч'; };
+
+// ---------- мир ----------
+const CASE = {A:'BEC_CONDUIT',B:'BEC_CASING',C:'BEC_MANIPULATOR',D:'BEC_CONFLICTCASING',E:'BEC_PEACECASING',F:'BEC_PRIMARYCOIL',G:'BEC_SECONDARYCOIL',H:'BEC_GLASS'};
+const CASE_RU = {A:'Плазменный кондуит сохранения когерентности',B:'Электромагнитно-изолированный корпус',C:'Манипулятор постоянной тонкой структуры',D:'Корпус индуцирования конфликта',E:'Миротворческий корпус',F:'Конденсатная трансформаторная катушка',G:'Катушка для отвода конденсата',H:'Электромагнитный волновод (стекло)'};
+// символ шлюза → корпус под ним (StructureWrapper.addCasing)
+const SLOTCASE = {BEC_GENERATOR:{'1':'B','2':'C'},BEC_CONTAINMENT_FIELD:{'1':'C'},BEC_ASSEMBLER:{'1':'B','2':'C','3':'C'},BEC_IO_NODE:{'1':'C'},BEC_DIODE:{'1':'C','2':'C'}};
+const HATCHCHAR = {BEC_GENERATOR:'1',BEC_CONTAINMENT_FIELD:'B',BEC_ASSEMBLER:'1',BEC_IO_NODE:'B',BEC_DIODE:'B'};
+const HOUSING = {BEC_GENERATOR:'B',BEC_CONTAINMENT_FIELD:'C',BEC_ASSEMBLER:'A',BEC_IO_NODE:'A',BEC_DIODE:'B'};   // getCasingTexture()
+const ACTIVE = {BEC_GENERATOR:'BEC_GENERATOR_ACTIVE',BEC_CONTAINMENT_FIELD:'BEC_STORAGE_ACTIVE',BEC_ASSEMBLER:'BEC_ASSEMBLER_ACTIVE',BEC_IO_NODE:'BEC_IONODE_ACTIVE',BEC_DIODE:'BEC_MAXWELL_GATE_ACTIVE'};
+const COL = {L:'#ff9a3c', R:'#5b8cff'};
+
+let Y0 = 17, K = 16;               // низ Матрицы наблюдения; число узлов
+const G = 8;                       // расстояние между люками LoS
+const RINGS = [12, 24, 36, 48];
+const V = (x,y,z) => [x,y,z];
+let PL = [];                       // размещения мультиблоков
+function place(id, st, F, U, aL, aW, extra){ PL.push(Object.assign({id, st, F, U, aL, aW}, extra||{})); }
+const NODE_GROUPS = [
+  {name:'спереди', F:V(0,0,1),  U:V(0,1,0), at:x=>V(x,Y0+15,G)},
+  {name:'сзади',   F:V(0,0,-1), U:V(0,1,0), at:x=>V(x,Y0+15,-30-G)},
+  {name:'сверху',  F:V(0,1,0),  U:V(0,0,1), at:x=>V(x,Y0+30+G,-15)},
+  {name:'снизу',   F:V(0,-1,0), U:V(0,0,1), at:x=>V(x,Y0-G,-15)}];
+const add3 = (a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]], mul3=(a,k)=>[a[0]*k,a[1]*k,a[2]*k], neg3=a=>[-a[0],-a[1],-a[2]];
+const cross = (a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const key = p => p[0]+','+p[1]+','+p[2];
+// узлы заполняются спереди → сзади → сверху → снизу; без нижних узлов Матрица стоит на земле
+function buildLayout(){
+  PL = []; Y0 = K > 12 ? 17 : 0;
+  place('field','BEC_CONTAINMENT_FIELD',V(0,0,1),V(0,1,0),V(44,8,22),V(-34,9,-15),{net:'L',title:'Поле удержания'});
+  place('gen','BEC_GENERATOR',V(0,0,1),V(0,1,0),V(9,9,33),V(-56,10,12),{net:'L',title:'Аппарат квантового запутывания'});
+  place('diode','BEC_DIODE',V(0,0,1),V(0,1,0),V(16,5,5),V(-10,6,-15),{title:'Затвор Максвелла'});
+  place('asm','BEC_ASSEMBLER',V(0,0,1),V(0,1,0),V(0,0,0),V(0,Y0,0),{net:'R',title:'Матрица наблюдения'});
+  NODE_GROUPS.forEach((g, gi) => RINGS.forEach((x, ri) => { const i = gi*4+ri; if (i < K) place('n'+i, 'BEC_IO_NODE', g.F, g.U, V(3,11,8), g.at(x), {node:i, grp:gi, title:'Узел '+(i+1)}); }));
+  for (const p of PL) {
+    p.B = neg3(p.F); p.R = cross(p.B, p.U);           // вид спереди: x вправо, y вверх, z вглубь
+    p.toW = l => add3(p.aW, add3(add3(mul3(p.R, l[0]-p.aL[0]), mul3(p.U, l[1]-p.aL[1])), mul3(p.B, l[2]-p.aL[2])));
+    p.dirW = d => add3(add3(mul3(p.R, d[0]), mul3(p.U, d[1])), mul3(p.B, d[2]));
+  }
+  PIPES.length = 0;
+  run('R', [V(-9,6,-15), V(-4,6,-15), V(-4,Y0+15,-15), V(-1,Y0+15,-15)]);      // затвор (выход) → Матрица
+  run('L', [V(-27,6,-15), V(-30,6,-15), V(-30,9,-15), V(-33,9,-15)]);          // затвор (вход) → Поле
+  run('L', [V(-56,10,11), V(-56,10,9), V(-56,9,9), V(-56,9,8)]);               // Энтанглер → Поле
+  pipeKeys = new Map(PIPES.map(q => [key(q.w), q]));
+}
+const DIRL = {px:[1,0,0],nx:[-1,0,0],py:[0,1,0],ny:[0,-1,0],pz:[0,0,1],nz:[0,0,-1]};
+
+// разбор структур: y вверх (H-1-строка)
+const GRID = {};
+for (const [n, s] of Object.entries(S)) {
+  const m = new Map(), list = [];
+  s.s.forEach((sl, z) => sl.forEach((row, r) => { for (let x = 0; x < row.length; x++) { const c = row[x]; if (c !== ' ') { const l = [x, s.H-1-r, z]; m.set(key(l), c); list.push([l, c]); } } }));
+  const sp = new Map(); for (const e of SPEC[n]) sp.set(key(e.p), e);
+  GRID[n] = {m, list, sp, W:s.W, H:s.H, D:s.D};
+}
+
+// ---------- three ----------
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0d14);
+scene.fog = new THREE.Fog(0x0a0d14, 160, 420);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 1200);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xc8d6ff, 0x2a2420, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(-60, 120, 80); scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 300), new THREE.MeshLambertMaterial({color:0x121722}));
+ground.rotation.x = -Math.PI/2; ground.position.set(-10, -0.01, -10); scene.add(ground);
+const grid = new THREE.GridHelper(400, 400, 0x1c2433, 0x161c28); grid.position.set(-10, 0, -10); scene.add(grid);
+
+// текстуры: картинки → canvas (кадры анимации — вертикальная лента)
+const IMG = {};
+function loadImages(){ return Promise.all(Object.entries(TEX).map(([n, u]) => new Promise(res => { const im = new Image(); im.onload = () => { IMG[n] = im; res(); }; im.onerror = res; im.src = u; }))); }
+const animated = [];
+function mkTex(canvas, frames, ft){
+  const t = new THREE.CanvasTexture(canvas); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 4;
+  if (frames > 1) { t.repeat.set(1, 1/frames); t.offset.set(0, 1-1/frames); animated.push({t, frames, ft:ft||2}); }
+  return t;
+}
+function tinted(img, color, frameH){
+  const c = document.createElement('canvas'); c.width = 16; c.height = frameH || img.height; const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0);
+  if (color) { g.globalCompositeOperation = 'multiply'; g.fillStyle = color; g.fillRect(0,0,c.width,c.height); g.globalCompositeOperation = 'destination-in'; g.drawImage(img, 0, 0); }
+  return c;
+}
+// база + оверлей (кадр 0), как ITexture[]{base, overlay}
+function composite(base, layers, frames){
+  frames = frames || 1;
+  const c = document.createElement('canvas'); c.width = 16; c.height = 16*frames; const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  for (let f = 0; f < frames; f++) {
+    if (base) g.drawImage(IMG[base], 0, 0, 16, 16, 0, f*16, 16, 16);
+    for (const [n, col, anim] of layers) {
+      const im = IMG[n]; if (!im) continue;
+      const fr = anim ? (f % (im.height/16)) : 0;
+      const src = col ? tinted(im, col) : im;
+      g.drawImage(src, 0, fr*16, 16, 16, 0, f*16, 16, 16);
+    }
+  }
+  return c;
+}
+const matCache = {};
+function texMat(n){
+  if (matCache[n]) return matCache[n];
+  const im = IMG[n], frames = im.height/16;
+  const t = mkTex(tinted(im), frames, ANIM[n]);
+  const glass = n === 'BEC_GLASS';
+  return matCache[n] = new THREE.MeshLambertMaterial({map:t, transparent:glass, opacity:glass ? .55 : 1, depthWrite:!glass, side:glass ? THREE.DoubleSide : THREE.FrontSide});
+}
+function slotMat(n){ const k = 'slot'+n; return matCache[k] || (matCache[k] = new THREE.MeshLambertMaterial({map:texMat(n).map, color:0xffd36a, emissive:0x3a2a00})); }
+const OVL = {energy:'OVERLAY_ENERGY_IN_MULTI', inhatch:'OVERLAY_PIPE_IN', detector:'OVERLAY_HATCH_CONDENSATE_DETECTOR', nanite:'OVERLAY_NANITE_HATCH', inbus:'OVERLAY_ME_INPUT_HATCH', outbus:'OVERLAY_PIPE_IN', ctrlhatch:'OVERLAY_HATCH_IO_NODE_CONTROLLER'};
+function hatchMat(st, kind, net){
+  const k = 'h'+st+kind+(net||'');
+  if (matCache[k]) return matCache[k];
+  const base = CASE[HOUSING[st]];
+  let layers;
+  if (kind === 'bec' || kind === 'becin') layers = [['OVERLAY_EM_D_SIDES', COL[net]], ['EM_DATA_CONN']];
+  else if (kind === 'los') layers = [['OVERLAY_EM_D_SIDES', '#bfefff'], ['EM_DATA_CONN']];
+  else if (kind === 'ctrl') layers = [['BEC_CONTROLLER_BACKGROUND']];
+  else layers = [[OVL[kind], kind === 'outbus' ? '#ffb070' : null]];
+  return matCache[k] = new THREE.MeshLambertMaterial({map:mkTex(composite(base, layers))});
+}
+
+// ---------- геометрия: только открытые грани, сразу в мировых координатах ----------
+const UPV = {px:[0,1,0],nx:[0,1,0],pz:[0,1,0],nz:[0,1,0],py:[0,0,-1],ny:[0,0,1]};
+function faceDirName(d){ return (d[0]>0?'px':d[0]<0?'nx':d[1]>0?'py':d[1]<0?'ny':d[2]>0?'pz':'nz'); }
+function pushFace(buf, w, dn){
+  const N = DIRL[dn], U = UPV[dn], R = cross(U, N);
+  const c = [w[0]+.5+.5*N[0], w[1]+.5+.5*N[1], w[2]+.5+.5*N[2]];
+  const P = (a,b) => [c[0]+a*R[0]*.5+b*U[0]*.5, c[1]+a*R[1]*.5+b*U[1]*.5, c[2]+a*R[2]*.5+b*U[2]*.5];
+  const q = [P(-1,-1), P(1,-1), P(1,1), P(-1,1)], uv = [[0,0],[1,0],[1,1],[0,1]];
+  for (const i of [0,1,2,0,2,3]) { buf.p.push(...q[i]); buf.n.push(...N); buf.u.push(...uv[i]); }
+}
+function meshFrom(bufs, group){
+  for (const [k, b] of Object.entries(bufs)) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(b.p, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(b.n, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(b.u, 2));
+    const m = new THREE.Mesh(g, b.mat); if (b.mat.transparent) m.renderOrder = 2;
+    group.add(m);
+  }
+}
+const OCC = new Map();             // мир: занятые клетки → размещение
+let showSlots = false;
+function buildPlacement(p, maxZ){
+  const gr = GRID[p.st], bufs = {};
+  const get = (k, mat) => bufs[k] || (bufs[k] = {p:[], n:[], u:[], mat});
+  for (const [l, c] of gr.list) {
+    if (maxZ != null && l[2] > maxZ) continue;
+    const w = p.toW(l), sp = gr.sp.get(key(l));
+    if (maxZ == null) OCC.set(key(w), p);
+    const glass = c === 'H';
+    for (const [dn, d] of Object.entries(DIRL)) {
+      const nl = [l[0]+d[0], l[1]+d[1], l[2]+d[2]];
+      const nc = (maxZ != null && nl[2] > maxZ) ? undefined : gr.m.get(key(nl));
+      if (nc && (nc !== 'H' || glass)) continue;
+      const wd = faceDirName(p.dirW(d));
+      if (sp && sp.f === dn) {
+        const net = sp.k === 'becin' ? 'L' : sp.k === 'bec' ? (p.st === 'BEC_DIODE' ? 'R' : p.net) : null;
+        const mk = 'h'+sp.k+net; pushFace(get(mk, hatchMat(p.st, sp.k, net)), w, wd);
+        if (sp.k === 'ctrl') p.ctrlW = {w, d:wd};
+      } else {
+        const base = sp ? HOUSING[p.st] : (CASE[c] ? c : SLOTCASE[p.st][c]);
+        const slot = showSlots && c === HATCHCHAR[p.st] && !sp;
+        const n = CASE[base];
+        pushFace(get((slot?'s':'')+n, slot ? slotMat(n) : texMat(n)), w, wd);
+      }
+    }
+  }
+  const g = new THREE.Group(); meshFrom(bufs, g); return g;
+}
+
+// ---------- кондуиты двух сетей ----------
+const PIPES = [];
+let pipeKeys = new Map();
+function run(net, pts){ for (let i = 0; i < pts.length-1; i++) { let a = pts[i], b = pts[i+1]; const d = [Math.sign(b[0]-a[0]), Math.sign(b[1]-a[1]), Math.sign(b[2]-a[2])]; let c = a.slice(); for (;;) { if (!PIPES.some(q => key(q.w) === key(c))) PIPES.push({w:c.slice(), net}); if (key(c) === key(b)) break; c = add3(c, d); } } }
+function pipeMat(net, active){
+  const k = 'pipe'+net+active; if (matCache[k]) return matCache[k];
+  const fr = active ? IMG.EM_BAR_ACTIVE.height/16 : 1;
+  const c = composite(null, [['EM_DATA', '#26252e'], [active ? 'EM_BAR_ACTIVE' : 'EM_BAR', COL[net], true]], fr);
+  return matCache[k] = new THREE.MeshLambertMaterial({map:mkTex(c, fr, ANIM.EM_BAR_ACTIVE), emissive:active ? new THREE.Color(COL[net]).multiplyScalar(.25) : 0});
+}
+const pipeGroup = {L:new THREE.Group(), R:new THREE.Group()};
+const pipeMeshes = [];
+function hatchAt(w){ const p = OCC.get(key(w)); if (!p) return null; const gr = GRID[p.st];
+  for (const e of gr.sp.values()) if ((e.k === 'bec' || e.k === 'becin') && key(p.toW(e.p)) === key(w)) return {p, e}; return null; }
+function buildPipes(){
+  const T = .5;
+  for (const q of PIPES) {
+    const parts = [[0,0,0,T,T,T]];
+    q.links = [];
+    for (const d of Object.values(DIRL)) {
+      const nw = add3(q.w, d), o = pipeKeys.get(key(nw)), h = hatchAt(nw);
+      if ((o && o.net === q.net) || h) { q.links.push(nw); parts.push([d[0]*(.5+T/2)/2, d[1]*(.5+T/2)/2, d[2]*(.5+T/2)/2, d[0]?(.5-T/2):T, d[1]?(.5-T/2):T, d[2]?(.5-T/2):T]); }
+    }
+    for (const [x,y,z,sx,sy,sz] of parts) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), pipeMat(q.net, false));
+      m.position.set(q.w[0]+.5+x, q.w[1]+.5+y, q.w[2]+.5+z); pipeGroup[q.net].add(m); pipeMeshes.push({m, net:q.net});
+    }
+  }
+}
+
+// ---------- OC: адаптеры у контроллеров, стойка ----------
+const ocGroup = new THREE.Group();
+function ocMat(n){ return matCache['oc'+n] || (matCache['oc'+n] = new THREE.MeshLambertMaterial({map:mkTex(tinted(IMG[n]))})); }
+function ocCube(w, side, top, front, frontDir){
+  const mats = ['px','nx','py','ny','pz','nz'].map(f => ocMat(f === frontDir ? front : (f === 'py' || f === 'ny') ? top : side));
+  const m = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mats); m.position.set(w[0]+.5, w[1]+.5, w[2]+.5); return m;
+}
+const ADAPTERS = [];
+
+// ---------- AE2: подсети по схеме Armisael5 (gtnh-bec-controller) ----------
+const aeGroup = new THREE.Group(); scene.add(aeGroup);
+const AE_BLOCKS = [], AE_LINKS = [], AE_FLOWS = [];
+const WL = {white:'WL_on1', magenta:'WL_on3', cyan:'WL_on10', black:'WL_on16'}, HUB = {white:'WL_on18', magenta:'WL_on20', black:'WL_on33'};
+const AEFLOW = [
+  ['order',  'Mainnet → Pending: паттерн отправлен (Dual Interface, Blocking + Smart Blocking)', '#f2f2f2'],
+  ['fluids', 'Pending → подсеть энтанглера: исходные жидкости (беспроводной коннектор, Insert Only)', '#9aa0aa'],
+  ['shuttle','Pending → Input: ячейка с партией едет через IO Port и конвейеры (Redstone I/O)', '#d24fd8'],
+  ['items',  'Input → узлы: Advanced Stocking Input Bus через беспроводные хабы', '#d24fd8'],
+  ['nanIn',  'Наниты → шина Матрицы: фейковый крафт «нанит→нанит» на P2P Dual Interface', '#3fd0d0'],
+  ['nanOut', 'Шина → наниты: storage bus Extract Only + IO Port, ячейку двигает Transposer', '#3fd0d0'],
+  ['output', 'Узлы → Mainnet: Output Bus (ME) через белые коннекторы', '#f2f2f2'],
+  ['back',   'Input → Pending: пустая ячейка возвращается, детектор предметов → Redstone I/O', '#d24fd8']];
+const flowOn = {
+  order:()=>M.phase==='IDENTIFY', fluids:()=>['IDENTIFY','PLAN'].includes(M.phase) || (M.phase==='WAIT_CONDENSATE' && M.entangling),
+  shuttle:()=>M.phase==='START' && M.phaseT < 12, items:()=>M.phase==='START',
+  nanIn:()=>M.phase==='START' || (M.phase==='RUN' && M.swapLeft > 0), nanOut:()=>M.phase==='DRAIN',
+  output:()=>M.phase==='DRAIN', back:()=>M.phase==='RETURN'};
+function ovlMat(base, ovl){ const k = 'ovl'+base+ovl; return matCache[k] || (matCache[k] = new THREE.MeshLambertMaterial({map:mkTex(composite(base, [[ovl]]))})); }
+function aeBox(w, side, top, front, dir, name){
+  const mm = n => typeof n === 'string' ? ocMat(n) : n;
+  const mats = ['px','nx','py','ny','pz','nz'].map(f => mm(f === dir && front ? front : (f === 'py' || f === 'ny') ? (top || side) : side));
+  const m = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mats); m.position.set(w[0]+.5, w[1]+.5, w[2]+.5);
+  aeGroup.add(m); AE_BLOCKS.push({w, name}); return m;
+}
+const DRIVE = w => aeBox(w, 'AE_BlockDriveSide', 'AE_BlockDrive', 'AE_BlockDriveFront', 'pz', 'ME Drive');
+const IOP = w => aeBox(w, 'AE_BlockIOPortSide', 'AE_BlockIOPort', null, null, 'ME IO Port');
+const HULL = (w, cover, dir) => aeBox(w, 'GT_MACHINE_UEV_SIDE', 'GT_MACHINE_UEV_TOP', ovlMat('GT_MACHINE_UEV_SIDE', cover), dir, 'Machine Hull');
+function aeLink(a, b, col, flow, rev){
+  const A = new THREE.Vector3(a[0]+.5, a[1]+.5, a[2]+.5), B = new THREE.Vector3(b[0]+.5, b[1]+.5, b[2]+.5);
+  const g = new THREE.BufferGeometry().setFromPoints([A, B]);
+  const line = new THREE.Line(g, new THREE.LineDashedMaterial({color:col, dashSize:.6, gapSize:.4, transparent:true, opacity:.55}));
+  line.computeLineDistances(); aeGroup.add(line);
+  AE_LINKS.push({a, b, col, line});
+  if (flow) aePath([rev ? B : A, rev ? A : B], flow, col);
+}
+const flowGeo = new THREE.SphereGeometry(.16, 8, 6);
+function aePath(pts, flow, col){
+  const f = {flow, path:pts, parts:[]}; f.len = pts[0].distanceTo(pts[1]);
+  for (let i = 0; i < 5; i++) { const m = new THREE.Mesh(flowGeo, new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:.95, blending:THREE.AdditiveBlending, depthWrite:false})); m.visible = false; aeGroup.add(m); f.parts.push({m, t:i/5}); }
+  AE_FLOWS.push(f);
+}
+const V3 = w => new THREE.Vector3(w[0]+.5, w[1]+.5, w[2]+.5);
+let AE_POS = {};
+function buildAE(){
+  // Mainnet: Dual Interface с умноженными паттернами, повёрнуты ключом в Pending
+  for (let i = 0; i < 4; i++) aeBox([-34+i, 0, 8], 'FC_fluid_interface', null, null, null, 'Dual Interface (mainnet)');
+  // копии паттернов без множителя: не в сети, рядом адаптеры OC
+  for (let i = 0; i < 4; i++) { aeBox([-34+i, 0, 6], 'FC_fluid_interface', null, null, null, 'Dual Interface (копия)'); aeBox([-34+i, 1, 6], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter'); }
+  // Pending (чёрная)
+  aeBox([-34,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); DRIVE([-33,0,9]); DRIVE([-32,0,9]);
+  aeBox([-31,0,9], WL.black, null, null, null, 'Wireless Connector → энтанглер');
+  IOP([-30,0,9]); HULL([-30,1,9], 'GT_OVERLAY_CONVEYOR', 'pz'); HULL([-29,0,9], 'GT_OVERLAY_CONVEYOR', 'pz'); IOP([-29,1,9]);
+  aeBox([-28,0,9], 'OC_RedstoneSouth', 'OC_RedstoneTop', null, null, 'Redstone I/O');
+  aeBox([-27,0,9], 'GT_MACHINE_UEV_SIDE', 'GT_MACHINE_UEV_TOP', ovlMat('GT_MACHINE_UEV_SIDE', 'GT_OVERLAY_ACTIVITYDETECTOR'), 'nx', 'Hull + Item Detector (storage bus Input)');
+  // Input (пурпурная)
+  aeBox([-24,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); aeBox([-23,0,9], 'AE_BlockInterface', null, null, null, 'ME Interface'); aeBox([-23,1,9], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter');
+  DRIVE([-22,0,9]); DRIVE([-21,0,9]);
+  const hubs = [[-24,1,9], [-22,1,9], [-21,1,9], [-20,1,9]]; hubs.forEach(h => aeBox(h, HUB.magenta, null, null, null, 'Wireless Hub'));
+  aeBox([-20,0,9], HUB.magenta, null, null, null, 'Wireless Hub (OC P2P к затвору и полю)');
+  // Наниты (бирюзовая)
+  aeBox([-16,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); IOP([-15,0,9]); aeBox([-15,1,9], 'OC_TransposerSide', 'OC_TransposerTop', null, null, 'Transposer'); IOP([-15,2,9]);
+  DRIVE([-14,0,9]); aeBox([-14,1,9], 'FC_fluid_interface', null, null, null, 'P2P Dual Interface + Fake Crafting Card');
+  aeBox([-13,0,9], 'AE_BlockCraftingStorage16384k', null, null, null, 'Crafting Storage'); aeBox([-13,1,9], 'AE_BlockCraftingAccelerator', null, null, null, 'Co-Processor');
+  aeBox([-12,0,9], WL.cyan, null, null, null, 'Wireless Connector → шина нанитов');
+  // подсеть энтанглера: у входного шлюза (Advanced Stocking Input Hatch)
+  const gen = PL.find(p => p.id === 'gen'), gi = SPEC.BEC_GENERATOR.find(e => e.k === 'inhatch');
+  const gD = gen.dirW(DIRL[gi.f]), gW = gen.toW(gi.p), lat = gD[2] ? [1,0,0] : [0,0,1];
+  const e1 = add3(gW, gD), e2 = add3(e1, gD);
+  aeBox(e1, 'FC_fluid_storage_bus', null, null, null, 'Fluid Storage Bus (Insert Only)'); DRIVE(add3(e1, lat)); DRIVE(add3(e1, neg3(lat)));
+  aeBox(e2, WL.black, null, null, null, 'Wireless Connector ← Pending');
+  aeLink([-31,0,9], e2, 0x9aa0aa, 'fluids');
+  // storage bus на шине нанитов Матрицы
+  const asm = asmP(), ni = SPEC.BEC_ASSEMBLER.find(e => e.k === 'nanite'), nW = add3(asm.toW(ni.p), asm.dirW(DIRL[ni.f]));
+  aeBox(nW, WL.cyan, null, null, null, 'Wireless Connector + Storage Bus (двусторонний)');
+  aeLink([-12,0,9], nW, 0x3fd0d0, 'nanIn'); aePath([V3(nW), V3([-12,0,9])], 'nanOut', 0x3fd0d0);
+  // узлы: пурпурный коннектор у Advanced Stocking Input Bus, белый — у Output Bus (ME)
+  const mainC = [-32.5, 0, 8];
+  PL.filter(p => p.node != null).forEach((p, i) => {
+    const ib = SPEC.BEC_IO_NODE.find(e => e.k === 'inbus'), ob = SPEC.BEC_IO_NODE.find(e => e.k === 'outbus');
+    const iw = add3(p.toW(ib.p), p.dirW(DIRL[ib.f])), ow = add3(p.toW(ob.p), p.dirW(DIRL[ob.f]));
+    aeBox(iw, WL.magenta, null, null, null, 'Wireless Connector → Input'); aeBox(ow, WL.white, null, null, null, 'Wireless Connector → Mainnet');
+    aeLink(hubs[i % 4], iw, 0xd24fd8, 'items'); aeLink(ow, mainC, 0xdddddd, 'output');
+  });
+  aePath([V3([-33,0,8]), V3([-34,0,9])], 'order', 0xffffff);
+  aePath([V3([-29,1,9]), V3([-24,0,9])], 'shuttle', 0xd24fd8);
+  aePath([V3([-24,0,9]), V3([-29,1,9])], 'back', 0xd24fd8);
+  AE_POS = {main:[-32.5,1.6,7], pend:[-31,1.8,9.5], input:[-22,2.6,9.5], nan:[-14,3.4,9.5], ent:add3(e2,[.5,1.6,.5]), nbus:add3(nW,[.5,1.6,.5])};
+  label('Mainnet: паттерны', AE_POS.main, '', 'ae'); label('Pending', AE_POS.pend, '', 'ae'); label('Input', AE_POS.input, '', 'ae');
+  label('Наниты', AE_POS.nan, '', 'ae'); label('Подсеть энтанглера', AE_POS.ent, '', 'ae'); label('Storage bus на шине нанитов', AE_POS.nbus, '', 'ae');
+}
+function aeStep(dt){
+  for (const f of AE_FLOWS) {
+    const on = aeGroup.visible && flowOn[f.flow]();
+    for (const q of f.parts) { q.m.visible = on; if (!on) continue; q.t = (q.t + dt*Math.min(1.2, 9/f.len)) % 1; q.m.position.copy(f.path[0]).lerp(f.path[1], q.t); }
+  }
+}
+
+
+// ---------- лучи LoS ----------
+const beams = [];
+function buildBeams(){
+  const asm = PL.find(p => p.id === 'asm'), losA = SPEC.BEC_ASSEMBLER.filter(e => e.k === 'los').map(e => ({w:asm.toW(e.p), d:faceDirName(asm.dirW(DIRL[e.f]))}));
+  for (const p of PL.filter(p => p.node != null)) {
+    const e = SPEC.BEC_IO_NODE.find(e => e.k === 'los'), w = p.toW(e.p), d = faceDirName(p.dirW(DIRL[e.f]));
+    p.losW = {w, d};
+    const a = losA.find(a => { const t = add3(a.w, mul3(DIRL[a.d], 1)); const v = [w[0]-a.w[0], w[1]-a.w[1], w[2]-a.w[2]], n = Math.hypot(...v); return n > 0 && Math.abs((v[0]*DIRL[a.d][0]+v[1]*DIRL[a.d][1]+v[2]*DIRL[a.d][2]) - n) < 1e-6; });
+    p.losPair = a;
+    if (!a) continue;
+    const A = new THREE.Vector3(a.w[0]+.5, a.w[1]+.5, a.w[2]+.5), B = new THREE.Vector3(w[0]+.5, w[1]+.5, w[2]+.5);
+    const len = A.distanceTo(B) - 1;
+    const geo = new THREE.CylinderGeometry(.16, .16, len, 10, 1, true);
+    const mat = new THREE.MeshBasicMaterial({color:0x4fd8ff, transparent:true, opacity:.25, blending:THREE.AdditiveBlending, depthWrite:false});
+    const m = new THREE.Mesh(geo, mat); m.position.copy(A).add(B).multiplyScalar(.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), B.clone().sub(A).normalize());
+    p.beam = m; beams.push(m); scene.add(m);
+  }
+}
+
+// ---------- активные контроллеры: анимированный оверлей ----------
+function activePlane(p){
+  if (!p.ctrlW) return;
+  const im = IMG[ACTIVE[p.st]], fr = im.height/16;
+  const k = 'act'+p.st;
+  const mat = matCache[k] || (matCache[k] = new THREE.MeshBasicMaterial({map:mkTex(tinted(im), fr, ANIM[ACTIVE[p.st]]), transparent:true, alphaTest:.05}));
+  const b = {p:[], n:[], u:[]}; pushFace(b, p.ctrlW.w, p.ctrlW.d);
+  const N = DIRL[p.ctrlW.d];
+  for (let i = 0; i < b.p.length; i += 3) { b.p[i] += N[0]*.004; b.p[i+1] += N[1]*.004; b.p[i+2] += N[2]*.004; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(b.p, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(b.u, 2));
+  p.act = new THREE.Mesh(g, mat); p.act.visible = false; scene.add(p.act);
+}
+
+// ---------- частицы конденсата по кондуитам ----------
+const flows = {R:{path:[], parts:[]}, L:{path:[], parts:[]}, G:{path:[], parts:[]}};
+function pathOf(pts){ return pts.map(w => new THREE.Vector3(w[0]+.5, w[1]+.5, w[2]+.5)); }
+let flowsMade = false;
+function initFlows(){
+  flows.R.path = pathOf([V(-10,6,-15), V(-4,6,-15), V(-4,Y0+15,-15), V(0,Y0+15,-15)]);
+  flows.L.path = pathOf([V(-34,9,-15), V(-30,9,-15), V(-30,6,-15), V(-26,6,-15)]);
+  flows.G.path = pathOf([V(-56,10,12), V(-56,10,9), V(-56,9,9), V(-56,9,7)]);
+  const geo = new THREE.SphereGeometry(.13, 8, 6);
+  for (const f of Object.values(flows)) {
+    let L = 0; f.seg = []; for (let i = 0; i < f.path.length-1; i++) { const d = f.path[i].distanceTo(f.path[i+1]); f.seg.push(d); L += d; } f.len = L;
+    if (!flowsMade) for (let i = 0; i < 14; i++) { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color:0x9ff0ff, transparent:true, opacity:.9, blending:THREE.AdditiveBlending, depthWrite:false})); m.visible = false; scene.add(m); f.parts.push({m, t:i/14}); }
+  }
+  flowsMade = true;
+}
+function flowStep(f, on, dt){
+  for (const q of f.parts) {
+    q.m.visible = on; if (!on) continue;
+    q.t = (q.t + dt*.35) % 1; let s = q.t*f.len, i = 0;
+    while (i < f.seg.length-1 && s > f.seg[i]) { s -= f.seg[i]; i++; }
+    q.m.position.copy(f.path[i]).lerp(f.path[i+1], Math.min(1, s/f.seg[i]));
+  }
+}
+
+// ---------- шаги постройки ----------
+const asmP = () => PL.find(p => p.id === 'asm');
+function counts(st){ const c = {}; for (const [, ch] of GRID[st].list) { const b = CASE[ch] ? ch : (SLOTCASE[st][ch] || null); if (b) c[b] = (c[b]||0)+1; } return c; }
+function caseList(st){ const c = counts(st); return '<ul>'+Object.entries(c).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `<li>${CASE_RU[k]} — ${v}</li>`).join('')+'</ul>'; }
+const STEPS = [
+  {t:'Обзор линии', show:'all', note:()=>`<p>Одна линия: <b>левая сеть</b> (оранжевая) — Поле удержания и Аппарат запутывания, <b>правая</b> (синяя) — Матрица наблюдения. Между ними — Затвор Максвелла: правая сторона видит конденсат левой, обратно — нет.</p><p>Узлов сейчас ${K} из 16: ставятся по 4 с каждой стороны Матрицы (спереди → сзади → сверху → снизу) и связаны лучами LoS, без кабелей.</p><p class="small">Габарит площадки ≈ 140×${Y0 ? 70 : 60}×120 блоков. В игре мультиблоки удобно ставить проектором StructureLib; схема — про взаимное расположение.</p>`},
+  {t:'Поле удержания', show:['field'], st:'field', note:()=>`<p>45×17×45, контроллер — внутри купола на центральной колонне (вход спереди, внутри).</p><p>4 шлюза конденсата по сторонам на высоте 9-го ряда: <b>справа</b> → к затвору, <b>спереди</b> → к энтанглеру. Остальные два свободны.</p><p>Энергия и Детектор конденсата — на любой электромагнитно-изолированный корпус (до 42 шлюзов). Ёмкость = напряжённость поля, 1 L = 1 EU/t; <b>остановка поля стирает всё</b>.</p>${caseList('BEC_CONTAINMENT_FIELD')}`},
+  {t:'Аппарат квантового запутывания', show:['field','gen'], st:'gen', note:()=>`<p>19×19×34. Шлюз конденсата — <b>сзади посередине</b>, смотрит на Поле. Входной шлюз жидкостей и энергия — на корпуса вокруг контроллера (до 16).</p><p>Энергия задаёт число параллелей; выход идёт сразу в сеть и делится между Полями пропорционально ёмкости.</p>${caseList('BEC_GENERATOR')}`},
+  {t:'Затвор Максвелла', show:['field','gen','diode'], st:'diode', note:()=>`<p>17×11×11. <b>Левый</b> шлюз (вход, оранжевая сеть) и <b>правый</b> (выход, синяя сеть) — по центру боковых граней, как в тултипе: «центральный левый корпус (вход), центральный правый (выход)». Лево/право — глядя на контроллер.</p><p>1A UIV постоянно. 19 слотов фильтра (по числу типов конденсата в 2.9.1); программа держит в одном слоте фиктивный фильтр (вода), иначе пустой список пропускает всё.</p>${caseList('BEC_DIODE')}`},
+  {t:'Кондуит левой сети', show:['field','gen','diode','pL'], note:()=>`<p>Кондуит конденсата одного цвета: затвор (вход) → Поле, энтанглер → Поле. Может поворачивать и ветвиться.</p><p>Цвет левой сети должен <b>отличаться</b> от правой: кондуиты разных цветов не соединяются, иначе сети сольются и затвор станет бесполезен.</p>`},
+  {t:'Матрица наблюдения', show:['field','gen','diode','pL','asm'], st:'asm', note:()=>`<p>61×31×31 — длинный цилиндр с 4 кольцами. На каждом кольце 4 люка прямой видимости (спереди, сзади, сверху, снизу) — <b>16 люков = 16 узлов</b>.</p><p>2 шлюза конденсата — в центре торцов; используется левый (к затвору). Шина нанитов (Nanite Containment Bus) и энергия — на внешние электромагнитно-изолированные корпуса (до 16). ${Y0 ? 'С нижними узлами Матрица держится в воздухе: низ на высоте '+Y0+'.' : 'Пока нижних узлов нет, Матрица стоит на земле.'}</p>${caseList('BEC_ASSEMBLER')}`},
+  {t:'Кондуит правой сети', show:['field','gen','diode','pL','asm','pR'], note:()=>`<p>Затвор (выход) → торцевой шлюз Матрицы. Другим цветом, чем левая сеть.</p><p>Матрица видит конденсат Поля только через затвор и только те типы, что в фильтре.</p>`},
+  {t:'Узлы 1–4 · спереди', show:['field','gen','diode','pL','asm','pR','g0'], grp:0, st:'n0', note:()=>nodeNote('спереди: контроллер смотрит от Матрицы, люк LoS — к ней.', 0)},
+  {t:'Узлы 5–8 · сзади', show:['field','gen','diode','pL','asm','pR','g0','g1'], grp:1, st:'n4', note:()=>nodeNote('сзади — зеркально передним.', 1)},
+  {t:'Узлы 9–12 · сверху', show:['field','gen','diode','pL','asm','pR','g0','g1','g2'], grp:2, st:'n8', note:()=>nodeNote('сверху: узел лежит, контроллер смотрит вверх, люк LoS — вниз. GT разрешает любые повороты, кроме вертикального переворота.', 2)},
+  {t:'Узлы 13–16 · снизу', show:['field','gen','diode','pL','asm','pR','g0','g1','g2','g3'], grp:3, st:'n12', note:()=>nodeNote('снизу: контроллер смотрит в землю, под ним — адаптер OC на земле. Только с нижними узлами Матрицу приходится поднимать на 17 блоков; до 12 узлов она стоит на земле.', 3)},
+  {t:'OpenComputers', show:'all', cam:()=>[[-14,2,-2], 45, [.5,.5,.7]], note:()=>`<p>Адаптер OC вплотную к контроллеру: ${K} узл., затвор, поле. До узлов — ME P2P (OC) от Input-подсети, как у Armisael5.</p><p>Стойка (сервер T4, Component Bus Creative, Internet Card) у затвора: компонентов ≈ ${K+11}, обычный ПК столько не держит. Redstone I/O управляет челноком ячеек AE2.</p>`},
+  {t:'AE2 · Pending и челнок', show:'all', cam:()=>[[-31,1,8], 26, [.35,.55,.75]], note:()=>`<p><b>Mainnet</b>: Dual Interface с <b>умноженными</b> паттернами BEC (вход — исходные жидкости, не запутанные), Blocking Card + Smart Blocking, ключом повернуть в Pending. Рядом — такие же Dual Interface <b>не в сети</b> с <b>немножёнными</b> копиями и адаптерами OC: по ним программа считает число копий.</p><p><b>Pending</b> (чёрная): ME Controller, 2 ME Drive, беспроводной коннектор к энтанглеру, 2 IO Port (3× Superluminal Acceleration Card, «Move to output when cell/network is empty»), 2 корпуса машины с конвейерами UEV и Machine Controller cover, Redstone I/O на красном сплаве. В верхний IO Port — ячейка 16384k (для крафтов Врат — Artificial Universe cell).</p>`},
+  {t:'AE2 · Input → узлы', show:'all', cam:()=>[[-10,8,4], 70, [.55,.5,.75]], note:()=>`<p><b>Input</b> (пурпурная): ME Controller, обычный (не Dual) ME Interface + адаптер, 2 ME Drive, 4 беспроводных хаба для узлов + 1 хаб для OC P2P к затвору и полю.</p><p>На каждом узле: пурпурный коннектор → <b>Advanced Stocking Input Bus</b> (включить, refresh 5 тиков), белый коннектор → <b>Output Bus (ME)</b> в Mainnet. Коннекторы узлов делить поровну между 4 хабами.</p><p>Корпус со storage bus на Input (высокий приоритет) и Item Detector cover → Redstone I/O: сигнал «ячейка пуста».</p>`},
+  {t:'AE2 · подсеть энтанглера', show:'all', cam:()=>[add3(AE_POS.ent,[0,-1,0]), 28, [.6,.5,.7]], note:()=>`<p>На энтанглере — Advanced Stocking Input Hatch. Отдельная маленькая подсеть: 2 ME Drive (жидкостные ячейки) + Fluid Storage Bus <b>Insert Only</b>, к ней — беспроводной коннектор от Pending: жидкости из паттерна сразу уходят сюда.</p><p>Основная сеть сюда <b>не подключается</b>: энтанглер запутает всё, что видит. Запас (passive) — класть в эту подсеть порциями (DESIGN.md §1.2a).</p>`},
+  {t:'AE2 · наниты', show:'all', cam:()=>[[-14,1,9], 26, [.45,.55,.75]], note:()=>`<p><b>Наниты</b> (бирюзовая, свой цвет кабеля!): Neutronium ME Controller + адаптер, 2 IO Port с Transposer между ними, ME Drive с ячейкой: фильтр на 10 нанитов BEC, Equal Distribution Card, Types = 10, объём = 307 200 × число Матриц. Crafting Storage + Co-Processor, Energy Anchor.</p><p>P2P <b>Dual</b> Interface (обычный Blocking, не Smart) + Fake Crafting Card, 10 паттернов «нанит → нанит», выход переименован в номер тира («1»…«10»), размер паттерна = нанитов этого тира / число Матриц (30 720 для одной).</p><p>Беспроводной коннектор → <b>двусторонний storage bus на Nanite Containment Bus</b> Матрицы; сверху — storage bus Extract Only к IO Port.</p>`},
+];
+function nodeNote(side, gi){ const n = Math.max(0, Math.min(4, K - gi*4)); if (!n) return `<p>Здесь узлов нет: выбрано ${K} узл. Узлы ставятся по порядку: спереди → сзади → сверху → снизу.</p>`; return `<p>Узел телепортации 7×23×13 — здесь ${n} шт., ${side}</p><p>Люк LoS — сзади посередине, повернуть ключом лицом к люку Матрицы. Расстояние здесь ${G} блоков (максимум 128), между люками — только прозрачные блоки: непрозрачный блок рвёт луч, незагруженный чанк — тоже.</p><p>На корпуса узла: Advanced Stocking Input Bus, выходная шина, Люк контроллера узла (только режим «пауза», не «параллели»).</p>${caseList('BEC_IO_NODE')}`; }
+
+// ---------- сборка сцены ----------
+const groups = {};
+function addGroup(id, obj){ groups[id] = obj; scene.add(obj); }
+function rebuild(p, maxZ){ if (p.mesh) { scene.remove(p.mesh); p.mesh.traverse(o => o.geometry && o.geometry.dispose()); } p.mesh = buildPlacement(p, maxZ); scene.add(p.mesh); p.mesh.visible = p.visibleFlag !== false; }
+
+const labelsEl = $('labels'), LABELS = [];
+function label(text, w, cls, owner){ const el = document.createElement('div'); el.className = 'lbl '+(cls||''); el.textContent = text; labelsEl.appendChild(el); LABELS.push({el, v:new THREE.Vector3(...w), owner}); }
+
+function centerOf(p){ const g = GRID[p.st]; return p.toW([g.W/2, g.H, g.D/2]); }
+
+function teardown(){
+  for (const p of PL) { for (const o of [p.mesh, p.beam, p.act]) if (o) { scene.remove(o); o.traverse && o.traverse(x => x.geometry && x.geometry.dispose()); } }
+  for (const g of [pipeGroup.L, pipeGroup.R, ocGroup, aeGroup]) { for (const c of [...g.children]) { g.remove(c); if (c.geometry && c.geometry !== flowGeo) c.geometry.dispose(); } }
+  AE_BLOCKS.length = 0; AE_LINKS.length = 0; AE_FLOWS.length = 0;
+  pipeMeshes.length = 0; beams.length = 0; ADAPTERS.length = 0; OCC.clear();
+  LABELS.length = 0; labelsEl.innerHTML = ''; slicePl = null;
+}
+function buildWorld(){
+  teardown(); buildLayout();
+  for (const p of PL) rebuild(p);
+  buildPipes();
+  buildBeams();
+  for (const p of PL) activePlane(p);
+  // адаптеры перед контроллерами
+  for (const p of PL.filter(p => p.id !== 'asm' && p.id !== 'gen')) {
+    const w = add3(p.ctrlW.w, DIRL[p.ctrlW.d]);
+    const a = ocCube(w, 'OC_AdapterSide', 'OC_AdapterTop', 'OC_AdapterSide'); ocGroup.add(a); ADAPTERS.push({p, w});
+  }
+  ocGroup.add(ocCube([-14,0,-4], 'OC_RackSide', 'OC_GenericTop', 'OC_RackFront', 'pz'));
+  ocGroup.add(ocCube([-14,1,-4], 'OC_RackSide', 'OC_GenericTop', 'OC_ServerFrontOn', 'pz'));
+  ocGroup.add(ocCube([-13,0,-4], 'OC_RedstoneSouth', 'OC_RedstoneTop', 'OC_RedstoneSouth', 'pz'));
+  initFlows();
+  buildAE();
+  for (const p of PL) { const c = centerOf(p); label(p.title, [c[0], c[1]+1.5, c[2]], p.net || '', p.id); }
+  label('Стойка OC', [-13.5, 2.6, -3.5], '', 'oc');
+  const d = PL.find(p => p.id === 'diode');
+  label('вход', d.toW([0,6.6,5]), 'L', 'diode');
+  label('выход', add3(d.toW([16,6.6,5]), [1,0,0]), 'R', 'diode');
+  checks();
+}
+scene.add(pipeGroup.L, pipeGroup.R, ocGroup);
+let ready = false;
+loadImages().then(() => {
+  buildWorld();
+  $('loading').remove(); ready = true;
+  renderSteps(); setStep(0); resize(); requestAnimationFrame(loop);
+});
+function setNodes(k, keepCam){
+  k = Math.max(1, Math.min(16, k|0));
+  if (k === K) return;
+  if (['START','RUN'].includes(M.phase)) { $('nodesN').value = K; log('Число узлов меняется только между партиями', 'w'); return; }
+  K = k; $('nodesN').value = K; $('nodesV').textContent = K;
+  if (ready) { buildWorld(); setStep(step, keepCam); }
+  est();
+}
+
+// ---------- шаги: видимость ----------
+let step = 0, labelMode = true, slicePl = null;
+function visibleSet(s){
+  if (s.show === 'all') return null;
+  const set = new Set(s.show); return set;
+}
+function setStep(i, keepCam){
+  step = Math.max(0, Math.min(STEPS.length-1, i));
+  const s = STEPS[step], set = visibleSet(s);
+  const vis = id => !set || set.has(id);
+  for (const p of PL) { p.visibleFlag = p.node != null ? vis('g'+p.grp) : vis(p.id); if (p.mesh) p.mesh.visible = p.visibleFlag; if (p.beam) p.beam.visible = p.visibleFlag && vis('asm'); if (p.act) p.act.visible = false; }
+  pipeGroup.L.visible = vis('pL'); pipeGroup.R.visible = vis('pR');
+  ocGroup.visible = s.show === 'all'; aeGroup.visible = s.show === 'all';
+  // слой: для текущего мультиблока
+  if (slicePl) { rebuild(slicePl); slicePl = null; }
+  const cur = s.st ? PL.find(p => p.id === s.st) : null;
+  $('layerBox').style.display = cur ? '' : 'none';
+  if (cur) { const g = GRID[cur.st]; $('layer').max = g.D; $('layer').value = g.D; $('layerV').textContent = 'все'; $('layerNote').textContent = 'Слои — срезы от фасада (контроллера) вглубь, как в StructureDefinition.'; }
+  $('stepNote').innerHTML = s.note();
+  [...$('steps').children].forEach((li, k) => li.className = k === step ? 'cur' : k < step ? 'done' : '');
+  // камера
+  let tgt, dist, camDir = null;
+  if (s.grp != null && PL.some(p => p.grp === s.grp)) { const ps = PL.filter(p => p.grp === s.grp); const c = ps.map(centerOf).reduce((a,b)=>add3(a,b)).map(v=>v/ps.length); tgt = c; dist = 95; camDir = [[.55,.45,.7],[.55,.45,-.7],[.5,.85,.45],[.75,.12,.65]][s.grp]; }
+  else if (s.grp != null) { tgt = centerOf(asmP()); tgt[1] -= 15; dist = 130; }
+  else if (s.cam) { const c = s.cam(); tgt = c[0]; dist = c[1]; camDir = c[2]; }
+  else if (cur) { tgt = centerOf(cur); tgt[1] -= GRID[cur.st].H/2; dist = Math.max(GRID[cur.st].W, GRID[cur.st].D)*1.8+20; }
+  else { tgt = [-10, 20, -15]; dist = 190; }
+  if (!keepCam) flyTo(new THREE.Vector3(...tgt), dist, camDir);
+  updLabels();
+}
+let fly = null;
+function flyTo(t, dist, d){
+  const dir = new THREE.Vector3(...(d || [.55, .45, .7])).normalize();
+  fly = {t0:performance.now(), fromT:controls.target.clone(), toT:t, fromP:camera.position.clone(), toP:t.clone().add(dir.multiplyScalar(dist))};
+}
+function renderSteps(){ $('steps').innerHTML = STEPS.map((s, k) => `<li data-k="${k}"><b>${k}</b><span>${s.t}</span></li>`).join(''); }
+$('steps').addEventListener('click', e => { const li = e.target.closest('li'); if (li) setStep(+li.dataset.k); });
+$('prev').onclick = () => setStep(step-1); $('next').onclick = () => setStep(step+1); $('all').onclick = () => setStep(0);
+$('tags').onclick = e => { labelMode = !labelMode; e.currentTarget.classList.toggle('on', labelMode); updLabels(); };
+$('slots').onclick = e => { showSlots = !showSlots; e.currentTarget.classList.toggle('on', showSlots); for (const p of PL) rebuild(p); setStep(step); };
+$('layer').oninput = e => {
+  const s = STEPS[step], cur = PL.find(p => p.id === s.st); if (!cur) return;
+  const g = GRID[cur.st], k = +e.target.value;
+  if (k >= g.D) { rebuild(cur); slicePl = null; $('layerV').textContent = 'все'; $('layerNote').textContent = 'Слои — срезы от фасада (контроллера) вглубь.'; return; }
+  rebuild(cur, k); slicePl = cur; $('layerV').textContent = (k+1)+' / '+g.D;
+  const c = {}; for (const [l, ch] of g.list) if (l[2] === k) { const b = CASE[ch] ? ch : SLOTCASE[cur.st][ch]; const nm = ch === '~' ? 'контроллер' : g.sp.get(key(l)) ? 'шлюз' : CASE_RU[b].split(' (')[0]; c[nm] = (c[nm]||0)+1; }
+  $('layerNote').textContent = 'Слой '+(k+1)+': '+Object.entries(c).map(([n,v]) => n+' '+v).join(', ');
+};
+
+function updLabels(){
+  const s = STEPS[step], set = visibleSet(s);
+  for (const L of LABELS) {
+    const p = PL.find(p => p.id === L.owner);
+    let on = labelMode && (!p || p.visibleFlag !== false) && ((L.owner !== 'oc' && L.owner !== 'ae') || s.show === 'all');
+    if (p && p.node != null) on = on && (s.grp === p.grp);
+    L.on = on; L.el.style.display = on ? '' : 'none';
+    L.el.classList.toggle('cur', !!p && (p.id === s.st || p.grp === s.grp));
+  }
+}
+
+// ---------- проверки схемы ----------
+function checks(){
+  const out = [];
+  // 1. пары LoS
+  let okLos = 0, worst = 0, blocked = 0;
+  for (const p of PL.filter(p => p.node != null)) {
+    const a = p.losPair; if (!a) continue;
+    const opp = DIRL[p.losW.d].every((v, i) => v === -DIRL[a.d][i]);
+    const n = Math.round(Math.hypot(p.losW.w[0]-a.w[0], p.losW.w[1]-a.w[1], p.losW.w[2]-a.w[2]));
+    let clear = true; for (let i = 1; i < n; i++) if (OCC.has(key(add3(a.w, mul3(DIRL[a.d], i))))) clear = false;
+    if (!clear) blocked++;
+    if (opp && clear && n <= 128) okLos++; worst = Math.max(worst, n);
+  }
+  out.push([okLos === K, `Люки LoS: ${okLos}/${K} пар смотрят друг на друга, расстояние ${worst} ≤ 128, ${blocked ? blocked+' перекрыто' : 'луч свободен'}`]);
+  // 2. пересечения
+  let coll = 0; const seen = new Map();
+  for (const p of PL) for (const [l] of GRID[p.st].list) { const k = key(p.toW(l)); if (seen.has(k) && seen.get(k) !== p) coll++; seen.set(k, p); }
+  for (const q of PIPES) if (OCC.has(key(q.w))) coll++;
+  out.push([coll === 0, coll ? `Пересечения блоков: ${coll}` : 'Мультиблоки и кондуиты не пересекаются']);
+  // 3. сети
+  function net(start){ const vis = new Set(), q = [start], hs = new Set(); while (q.length) { const w = q.pop(); for (const d of Object.values(DIRL)) { const nw = add3(w, d), k = key(nw); if (vis.has(k)) continue; const o = pipeKeys.get(k); if (o && o.net === pipeKeys.get(key(start)).net) { vis.add(k); q.push(nw); } const h = hatchAt(nw); if (h) hs.add(h.p.id+':'+h.e.k); } } return hs; }
+  const L = net(V(-27,6,-15)), R = net(V(-9,6,-15)), G2 = net(V(-56,10,11));
+  const lOk = L.has('diode:becin') && L.has('field:bec') && !L.has('asm:bec') && G2.has('gen:bec') && G2.has('field:bec');
+  const rOk = R.has('diode:bec') && R.has('asm:bec') && !R.has('field:bec');
+  out.push([lOk, 'Левая сеть: вход затвора + Поле + энтанглер, без Матрицы']);
+  out.push([rOk, 'Правая сеть: выход затвора + Матрица, без Поля']);
+  out.push([COL.L !== COL.R, 'Кондуиты двух сетей разного цвета']);
+  // 4. повороты
+  const flip = PL.some(p => p.U[1] < 0);
+  out.push([!flip, 'Нет вертикального переворота (запрещён в GT)']);
+  // 5. адаптеры
+  let ad = 0; for (const a of ADAPTERS) if (!OCC.has(key(a.w))) ad++;
+  out.push([ad === ADAPTERS.length, `Адаптеры OC у контроллеров: ${ad}/${ADAPTERS.length} (${K} узл., затвор, поле)`]);
+  let aeColl = 0; const used = new Set(ADAPTERS.map(a => key(a.w)));
+  for (const b of AE_BLOCKS) { const k = key(b.w); if (OCC.has(k) || pipeKeys.has(k) || used.has(k)) aeColl++; used.add(k); }
+  out.push([aeColl === 0, aeColl ? `Блоки AE2 пересекаются: ${aeColl}` : `Блоки AE2 (${AE_BLOCKS.length}) не пересекаются с линией, кондуитами и адаптерами`]);
+  $('checks').innerHTML = out.map(([ok, t]) => `<li><span class="${ok?'y':'n'}">${ok?'✓':'✗'}</span><span>${t}</span></li>`).join('');
+}
+
+// ---------- модель работы ----------
+const TIER_RU = ['','углерод','серебро','золото','трансцендентный','шестифазная медь','белый карлик','чёрный карлик','универсиум','вечность','магматерия'];
+const CTD = __CT__;                // CondensateType 2.9.1: единица, длительность, EU/t энтанглера
+const CTN = {Neutronium:['Нейтроний','#8c95a8'],CosmicNeutronium:['Космич. нейтроний','#4b4f7a'],Bedrockium:['Бедрокиум','#6b6b6b'],ChromaticGlass:['Хроматич. стекло','#7fe0c8'],CelestialTungsten:['Небесный вольфрам','#9aa6b8'],Infinity:['Бесконечность','#e2b3ff'],Hypogen:['Гипоген','#ff8a3d'],TranscendentMetal:['Трансцендентный','#cf4f8a'],DimensionallyShiftedSuperfluid:['Сверхтекучесть DSS','#b07cff'],PhononMedium:['Фононная среда','#8fd0ff'],QuarkGluonPlasma:['КГП','#ffd25a'],SpaceTime:['Пространство-время','#5ad1d6'],Time:['Время','#d8e86a'],Space:['Пространство','#3b56d9'],BoundlessCosmicSolder:['Космич. припой','#ff6fb0'],MHDCSM:['MHDCSM','#ff4f6a'],MagMatter:['Магматерия','#c7a6ff'],Universium:['Универсиум','#2c2f7a'],Eternity:['Вечность','#f2f4ff']};
+const CT = t => CTN[t] || [t, '#aaa'];
+const RECIPES = __RECIPES__;
+const VOLT = {UEV:8388608, UIV:33554432, UMV:134217728, UXV:536870912};
+$('recipe').innerHTML = RECIPES.map((r, i) => `<option value="${i}">${r.tier} · тиры ${Math.min(...r.tiers)}–${Math.max(...r.tiers)} · ${fmtT(r.dur)} · ${r.name}${r.out > 1 ? ' ×'+r.out : ''}</option>`).join('');
+const rIdx = n => Math.max(0, RECIPES.findIndex(r => r.name.startsWith(n)));
+$('recipe').value = rIdx('Magnetic Confinement');
+const FOREIGN_ORDER = ['Neutronium','QuarkGluonPlasma','Universium','Bedrockium','MagMatter','Time','CosmicNeutronium','PhononMedium','Hypogen','Infinity','ChromaticGlass'];
+const UIV = VOLT.UIV;
+const M = {
+  speed:20, strategy:'auto', entMode:'auto', ent:null, filterBad:false, checksOff:false, foreign:4, fieldPower:true, arrayCut:false,
+  phase:'IDLE', phaseT:0, order:null, field:{}, cap:0, done:0, lost:0, t0:0, tick:0, foreignSet:[],
+  prov:0, swapLeft:0, nodes:[], log:[]
+};
+const logEU = v => Math.round(Math.pow(10, 7 + v/100*6));      // 10 млн … 10 трлн EU/t
+const euSlider = eu => Math.round((Math.log10(eu) - 7)/6*100);
+function ampsOf(eu){ for (const [n, v] of [['UXV',VOLT.UXV],['UMV',VOLT.UMV],['UIV',VOLT.UIV]]) if (eu >= v) return '≈ '+(eu/v >= 10 ? Math.round(eu/v) : (eu/v).toFixed(1))+'A '+n; return '≈ '+(eu/VOLT.UEV).toFixed(1)+'A UEV'; }
+function nanites(){ const v = +$('nan').value; return Math.max(1, Math.round(Math.pow(30720, v/100))); }
+const nanSlider = n => Math.round(Math.log(n)/Math.log(30720)*100);
+function cfg(){ const r = RECIPES[+$('recipe').value]; return {r, copies:+$('copies').value, nodes:K, N:nanites(), tmax:+$('tmax').value, E:logEU(+$('ent').value), MX:logEU(+$('mx').value)}; }
+// энтанглер — как MTEBECGenerator.checkProcessing: на входе ровно столько исходной жидкости, сколько нужно;
+// питание делится поровну (сначала типы с наименьшим «входом × EU/t»), остаток — вторым проходом;
+// цикл длится столько, сколько самый долгий тип с параллелями > 0; выход — в конце цикла
+function entCycle(types, need, E){
+  const c = types.filter(t => need[t] > 0).map(t => ({t, d:CTD[t], maxIn:Math.ceil(need[t]/CTD[t].unit), p:0}));
+  c.sort((a, b) => a.maxIn*a.d.eut - b.maxIn*b.d.eut);
+  let rem = E;
+  c.forEach((x, i) => { const share = rem/(c.length - i); x.p = Math.min(x.maxIn, Math.floor(share/x.d.eut)); rem -= x.p*x.d.eut; });
+  for (const x of c) { const add = Math.min(x.maxIn - x.p, Math.floor(rem/x.d.eut)); if (add > 0) { x.p += add; rem -= add*x.d.eut; } }
+  const on = c.filter(x => x.p > 0);
+  return {out:Object.fromEntries(on.map(x => [x.t, x.p*x.d.unit])), dur:on.length ? Math.max(...on.map(x => x.d.dur)) : 0, eu:E - rem};
+}
+// группы подачи: «все сразу» — одна группа; «по длительности» — типы с одинаковым временем рецепта вместе
+function entGroups(r, mode){
+  const ts = Object.keys(r.cond);
+  if (mode === 'all') return [ts];
+  const by = {}; for (const t of ts) (by[CTD[t].dur] = by[CTD[t].dur] || []).push(t);
+  return Object.keys(by).sort((a, b) => b - a).map(k => by[k]);
+}
+function simEnt(r, copies, E, mode, have){
+  const need = {}; for (const [t, a] of Object.entries(r.cond)) need[t] = Math.max(0, a*copies - ((have && have[t]) || 0));
+  let ticks = 0, it = 0;
+  for (const g of entGroups(r, mode)) {
+    while (g.some(t => need[t] > 0)) {
+      const c = entCycle(g, need, E);
+      if (!c.dur || ++it > 2e6) return Infinity;
+      ticks += c.dur; for (const [t, v] of Object.entries(c.out)) need[t] = Math.max(0, need[t] - v);
+    }
+  }
+  return ticks;
+}
+function plan(c){
+  const n = Math.min(c.nodes, c.copies), base = Math.floor(c.copies/n), rem = c.copies % n;
+  const P = Array.from({length:n}, (_, i) => base + (i < rem ? 1 : 0));
+  const Pm = Math.max(...P), len = c.r.dur / c.r.tiers.length, Tm = Math.max(...c.r.tiers);
+  const tConst = c.r.tiers.reduce((s, t) => s + Math.max(1, len*Pm*Math.pow(2, Tm-t)/c.N), 0);
+  let sw = 0; c.r.tiers.forEach((t, i) => { if (i === 0 || t !== c.r.tiers[i-1]) sw++; });
+  const tSwap = c.r.tiers.reduce((s) => s + Math.max(1, len*Pm/c.N), 0) + sw*60;
+  const tAll = simEnt(c.r, c.copies, c.E, 'all'), tGrp = simEnt(c.r, c.copies, c.E, 'group');
+  const entMode = M.entMode === 'auto' ? (tGrp < tAll ? 'group' : 'all') : M.entMode, tEnt = entMode === 'group' ? tGrp : tAll;
+  const entBad = Object.keys(c.r.cond).filter(t => Math.floor(c.E / CTD[t].eut) < 1);
+  const durs = [...new Set(Object.keys(c.r.cond).map(t => CTD[t].dur/20))].sort((a, b) => a - b);
+  let cum = 0, powered = 0; for (const p of P) { cum += c.r.eut*p; if (cum <= c.MX) powered++; else break; }
+  return {P, tConst, tSwap, sw, Tm, tEnt, tAll, tGrp, entMode, durs, entBad, powered, euNodes:P.reduce((s, p) => s + c.r.eut*p, 0)};
+}
+function est(){
+  const c = cfg(), p = plan(c);
+  $('copiesV').textContent = c.copies; $('nodesV').textContent = K; $('nanV').textContent = fmt(c.N);
+  $('tmaxV').textContent = c.tmax; $('tmaxV').title = TIER_RU[c.tmax];
+  $('entV').textContent = fmt(c.E); $('entV').title = ampsOf(c.E); $('mxV').textContent = fmt(c.MX); $('mxV').title = ampsOf(c.MX);
+  const pick = M.strategy === 'auto' ? (p.tConst <= p.tSwap ? 'const' : 'swap') : M.strategy;
+  const warn = [];
+  if (p.Tm > c.tmax) warn.push(`нужны наниты тира ${p.Tm} (${TIER_RU[p.Tm]}), есть до ${c.tmax}`);
+  if (p.entBad.length) warn.push(`энтанглеру не хватает EU даже на 1 параллель: ${p.entBad.map(t => CT(t)[0]+' ≥ '+fmt(CTD[t].eut)).join(', ')} EU/t`);
+  if (p.powered < p.P.length) warn.push(`Матрица запитает ${p.powered} из ${p.P.length} узлов (нужно ${fmt(p.euNodes)} EU/t)`);
+  $('est').innerHTML = `P на узел до ${Math.max(...p.P)}, узлов ${p.P.length}. Сборка: <b>один тир</b> (${TIER_RU[p.Tm]}) — ${fmtT(p.tConst)}; <b>по шагам</b> — ${fmtT(p.tSwap)} (${p.sw} смен × 3 с). Выбрано: ${pick === 'const' ? 'один тир' : 'по шагам'}. <br>Энтанглер, рецепты ${p.durs.join(' / ')} с: <b>все сразу</b> — ${fmtT(p.tAll)}, <b>по длительности</b> — ${fmtT(p.tGrp)}. Выбрано: ${p.entMode === 'group' ? 'по длительности' : 'все сразу'}${isFinite(p.tEnt) && p.tEnt > 20*3600 ? ' — дольше сборки, держи запас («Залить запас»)' : ''}.` + (warn.length ? `<br><span style="color:var(--warn)">⚠ ${warn.join('; ')}</span>` : '');
+  return {c, p, pick};
+}
+// пресеты: порядок величин по этапам игры (условно)
+const PRESETS = [
+  {n:'Старт · UIV', K:1, N:64, tmax:4, r:'Electromagnetically-isolated Casing', copies:1, E:4*VOLT.UIV, MX:VOLT.UIV, note:'Первая линия: 1 узел, наниты углерод–трансцендентный по 64 шт., доделываем корпуса BEC.'},
+  {n:'Разгон · UIV', K:4, N:1024, tmax:5, r:'Meta Material Sensor Array 2', copies:8, E:16*VOLT.UIV, MX:8*VOLT.UIV, note:'4 узла спереди, появилась шестифазная медь, метаматериалы 2-го тира.'},
+  {n:'UMV', K:8, N:4096, tmax:6, r:'Transdimensional Alignment Matrix', copies:8, E:128*VOLT.UMV, MX:16*VOLT.UMV, note:'8 узлов (спереди и сзади), Матрица ещё на земле, крафты Convergence. Запутывание партии (~35 мин) в сотни раз дольше сборки — запас держать заранее.'},
+  {n:'UXV', K:12, N:16384, tmax:8, r:'Meta Material Shielding 3', copies:24, E:16*VOLT.UXV, MX:32*VOLT.UXV, note:'12 узлов (+ сверху), наниты до универсиума, метаматериалы 3-го тира.'},
+  {n:'Топ', K:16, N:30720, tmax:10, r:'Astral Array Fabricator', copies:16, E:4096*VOLT.UXV, MX:64*VOLT.UXV, note:'Все 16 узлов, Матрица поднята, все 10 тиров по 30 720. Astral Array Fabricator: 0.5 млн L космического припоя на партию — даже 4096A UXV на энтанглер дают ~50 мин.'}];
+$('presets').innerHTML = PRESETS.map((p, i) => `<button data-pr="${i}">${p.n}</button>`).join('');
+function applyPreset(i){
+  const p = PRESETS[i];
+  if (['START','RUN'].includes(M.phase)) return log('Пресет меняется только между партиями', 'w');
+  if (M.order && M.phase !== 'HALT') { log('Заказ отменён: сменился пресет', 'w'); M.order = null; go('IDLE'); }
+  document.querySelectorAll('[data-pr]').forEach(b => b.classList.toggle('on', +b.dataset.pr === i));
+  $('recipe').value = rIdx(p.r); $('copies').value = p.copies; $('nan').value = nanSlider(p.N); $('tmax').value = p.tmax;
+  $('ent').value = euSlider(p.E); $('mx').value = euSlider(p.MX);
+  $('prNote').textContent = p.note + ' Значения условные — порядок величин этапа.';
+  setNodes(p.K); seedForeign(); est();
+}
+$('presets').addEventListener('click', e => { const b = e.target.closest('[data-pr]'); if (b) applyPreset(+b.dataset.pr); });
+['copies','nan','tmax','ent','mx'].forEach(id => $(id).addEventListener('input', () => { document.querySelectorAll('[data-pr]').forEach(b => b.classList.remove('on')); est(); }));
+$('recipe').addEventListener('input', () => { document.querySelectorAll('[data-pr]').forEach(b => b.classList.remove('on')); if (!['START','RUN'].includes(M.phase)) seedForeign(); est(); });
+let nodesTimer = 0;
+$('nodesN').addEventListener('input', e => { $('nodesV').textContent = e.target.value; clearTimeout(nodesTimer); nodesTimer = setTimeout(() => { document.querySelectorAll('[data-pr]').forEach(b => b.classList.remove('on')); setNodes(+e.target.value, true); }, 200); });
+document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { M.strategy = b.dataset.st; document.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x === b)); est(); });
+document.querySelectorAll('[data-em]').forEach(b => b.onclick = () => { M.entMode = b.dataset.em; document.querySelectorAll('[data-em]').forEach(x => x.classList.toggle('on', x === b)); est(); });
+document.querySelectorAll('[data-sp]').forEach(b => b.onclick = () => { M.speed = +b.dataset.sp; document.querySelectorAll('[data-sp]').forEach(x => x.classList.toggle('on', x === b)); });
+document.querySelectorAll('[data-fo]').forEach(b => b.onclick = () => { M.foreign = +b.dataset.fo; document.querySelectorAll('[data-fo]').forEach(x => x.classList.toggle('on', x === b)); seedForeign(); });
+$('fFilter').onclick = e => { M.filterBad = !M.filterBad; e.currentTarget.classList.toggle('on', M.filterBad); };
+$('fChecks').onclick = e => { M.checksOff = !M.checksOff; e.currentTarget.classList.toggle('on', M.checksOff); };
+$('fArray').onclick = e => { M.arrayCut = !M.arrayCut; e.currentTarget.classList.toggle('on', M.arrayCut); };
+$('fField').onclick = e => { M.fieldPower = !M.fieldPower; e.currentTarget.classList.toggle('on', !M.fieldPower); if (!M.fieldPower) { M.field = {}; log('Поле удержания обесточено — содержимое стёрто', 'e'); } else { log('Поле снова под питанием (пустое)', 'w'); seedForeign(); } };
+function log(t, cls){ M.log.unshift([fmtT(M.tick), t, cls||'']); M.log.length = Math.min(M.log.length, 40); }
+// чужие конденсаты — типы, которых нет в текущем рецепте
+function seedForeign(){
+  if (!M.fieldPower) return;
+  for (const f of M.foreignSet) delete M.field[f];
+  const r = RECIPES[+$('recipe').value];
+  M.foreignSet = FOREIGN_ORDER.filter(t => !(t in r.cond)).slice(0, M.foreign);
+  M.foreignSet.forEach((f, i) => M.field[f] = [20000, 15000, 8000, 5000][i]);
+  M.cap = Math.max(M.cap, total()*1.2);
+}
+function total(){ return Object.values(M.field).reduce((a, b) => a+b, 0); }
+seedForeign();
+$('bStock').onclick = () => { if (!M.fieldPower) return; const c = cfg(); for (const [t, a] of Object.entries(c.r.cond)) M.field[t] = (M.field[t]||0) + a*c.copies*3; M.cap = Math.max(M.cap, total()*1.2); log('Залит запас на 3 партии: '+Object.keys(c.r.cond).map(t => CT(t)[0]).join(', '), 'g'); };
+$('bReset').onclick = () => { M.phase = 'IDLE'; M.order = null; M.ent = null; M.nodes = []; M.done = M.lost = 0; M.log = []; M.field = {}; M.foreignSet = []; M.cap = 0; seedForeign(); log('Сброс'); };
+$('bOrder').onclick = () => { if (M.phase !== 'IDLE' && M.phase !== 'HALT') return log('Линия занята — заказ ждёт в Pending', 'w'); const e = est(); M.order = {r:e.c.r, copies:e.c.copies, N:e.c.N, P:e.p.P, pick:e.pick, Tm:e.p.Tm, tmax:e.c.tmax, E:e.c.E, MX:e.c.MX, entMode:e.p.entMode}; M.ent = null; go('IDENTIFY'); log(`Заказ: ${e.c.r.name} × ${e.c.copies}`); };
+function go(ph){ M.phase = ph; M.phaseT = 0; }
+function visibleTypes(){
+  if (!M.fieldPower) return [];
+  if (M.filterBad) return Object.keys(M.field).filter(t => M.field[t] > 0);     // пустой фильтр = пропускает всё
+  if (!M.order || !['ROUTE','START','RUN'].includes(M.phase)) return [];        // только фиктивный фильтр
+  return Object.keys(M.order.r.cond).filter(t => M.field[t] > 0);
+}
+function contaminants(){ if (!M.order) return 0; return visibleTypes().filter(t => !(t in M.order.r.cond)).length; }
+function tickModel(){
+  M.tick++; M.phaseT++;
+  const o = M.order;
+  // поле: переполнение раз в 20 тиков ×9/10
+  if (M.tick % 20 === 0 && total() > M.cap && M.fieldPower) for (const t in M.field) M.field[t] = Math.floor(M.field[t]*9/10);
+  M.entangling = false;
+  switch (M.phase) {
+    case 'IDENTIFY': if (M.phaseT > 20) { go('PLAN'); } break;
+    case 'PLAN': if (M.phaseT > 10) {
+      if (o.Tm > o.tmax) { log(`Стоп: нужны наниты тира ${o.Tm} (${TIER_RU[o.Tm]}), в наличии до ${o.tmax}`, 'e'); go('HALT'); break; }
+      const need = Object.entries(o.r.cond).reduce((s, [t, a]) => s + a*o.copies, 0); M.cap = Math.ceil((total()+need)*1.25);   // программа ставит напряжённость под партию (не ниже текущего объёма)
+      let cum = 0, pw = 0; for (const p of o.P) { cum += o.r.eut*p; if (cum <= o.MX) pw++; else break; }
+      log(`План: ${o.P.length} узл. × P≤${Math.max(...o.P)}, наниты: ${o.pick === 'const' ? 'один тир '+TIER_RU[o.Tm] : 'по шагам'}; поле ${fmt(M.cap)} L`);
+      if (pw < o.P.length) log(`Матрица запитает ${pw} из ${o.P.length} узлов одновременно — остальные ждут очереди`, 'w');
+      go('WAIT_CONDENSATE'); } break;
+    case 'WAIT_CONDENSATE': {
+      const need = {};
+      for (const [t, a] of Object.entries(o.r.cond)) need[t] = Math.max(0, a*o.copies - (M.field[t]||0));
+      if (!M.fieldPower) { M.ent = null; break; }
+      if (!Object.values(need).some(v => v > 0) && !M.ent) { log('Конденсат на партию есть'); go('ROUTE'); break; }
+      if (!M.ent) M.ent = {groups:entGroups(o.r, o.entMode), gi:0, cyc:null};
+      const e = M.ent;
+      if (!e.cyc) {
+        while (e.gi < e.groups.length && !e.groups[e.gi].some(t => need[t] > 0)) e.gi++;
+        if (e.gi >= e.groups.length) { M.ent = null; break; }
+        const c = entCycle(e.groups[e.gi], need, o.E);
+        if (!c.dur) { if (!e.warned) { log('Энтанглеру не хватает EU даже на 1 параллель — конденсата не будет', 'e'); e.warned = true; } break; }
+        e.cyc = {left:c.dur, out:c.out, eu:c.eu};
+        if (M.phaseT === 1 || e.lastG !== e.gi) { log(`Энтанглер: ${e.groups[e.gi].map(t => CT(t)[0]).join(' + ')}, цикл ${c.dur/20} с, ${fmt(c.eu)} EU/t`); e.lastG = e.gi; }
+      }
+      M.entangling = true;
+      if (--e.cyc.left <= 0) { for (const [t, v] of Object.entries(e.cyc.out)) M.field[t] = (M.field[t]||0) + v; e.cyc = null; }
+      break; }
+    case 'ROUTE': if (M.phaseT > 10) {
+      const c = contaminants();
+      if (c > 0 && !M.checksOff) { log(`Стоп: Матрице видно ${c} чужих конденсата — фильтр затвора не тот. Старт запрещён (инвариант 2)`, 'e'); go('HALT'); break; }
+      go('START'); } break;
+    case 'START': if (M.phaseT > 20) {
+      M.nodes = o.P.map(P => ({P, prog:0, acc:0, cons:{}, st:'run'}));
+      M.prov = o.pick === 'const' ? o.Tm : 0; M.swapLeft = 0;
+      log(`Старт, узлов: ${M.nodes.length}`); M.t0 = M.tick; go('RUN'); } break;
+    case 'RUN': runNodes(); break;
+    case 'DRAIN': if (M.phaseT > 40) { go('RETURN'); } break;
+    case 'RETURN': if (M.phaseT > 20) { go('IDLE'); M.order = null; } break;
+  }
+}
+function runNodes(){
+  const o = M.order, r = o.r, len = r.dur / r.tiers.length, cont = contaminants();
+  const live = M.nodes.filter(n => n.st === 'run' || n.st === 'wait');
+  if (cont > 3 && live.length) { for (const n of live) n.st = 'lost'; M.lost += live.reduce((s, n) => s + n.P, 0); log(`Засор: видно ${cont} > 3 незапрошенных конденсатов — рецепты на всех узлах потеряны`, 'e'); return finish(); }
+  if (M.arrayCut && live.length) { for (const n of live) n.st = 'lost'; M.lost += live.reduce((s, n) => s + n.P, 0); log('Обрыв питания Матрицы — критическая остановка, рецепты потеряны', 'e'); return finish(); }
+  // наниты по шагам: опорный узел — с наименьшим прогрессом
+  if (o.pick === 'swap') {
+    const ref = live.reduce((a, b) => (a && a.prog <= b.prog) ? a : b, null);
+    const need = ref ? r.tiers[Math.min(r.tiers.length-1, Math.floor(ref.prog/len))] : M.prov;
+    if (M.swapLeft > 0) { if (--M.swapLeft === 0) M.prov = M.swapTo; }
+    else if (need !== M.prov) { M.swapTo = need; M.swapLeft = 60; }
+  }
+  const N = M.swapLeft > 0 ? 0 : o.N;
+  let budget = o.MX, out = false;           // Матрица питает узлы по порядку, пока хватает EU
+  const vis = new Set(visibleTypes());
+  M.nodes.forEach(n => {
+    if (n.st !== 'run' && n.st !== 'wait') return;
+    const eu = r.eut*n.P;
+    if (out || eu > budget) { out = true; n.st = 'wait'; n.why = 'нет питания'; return; }
+    budget -= eu;
+    for (const [t, a] of Object.entries(r.cond)) { const want = a*n.P - (n.cons[t]||0); if (want > 0 && vis.has(t)) { const take = Math.min(want, M.field[t]||0); M.field[t] -= take; n.cons[t] = (n.cons[t]||0) + take; } }
+    const req = r.tiers[Math.min(r.tiers.length-1, Math.floor(n.prog/len))];
+    if (M.prov < req || N === 0) { n.st = 'wait'; n.why = M.swapLeft ? 'смена нанитов' : 'тир ниже'; return; }
+    n.st = 'run'; n.why = '';
+    const D = n.P * Math.pow(2, M.prov - req) * Math.max(cont+1, 1);
+    n.acc += N; const inc = Math.floor(n.acc / D); n.acc -= inc*D; n.prog += inc;
+    if (n.prog >= r.dur) {
+      const ok = Object.entries(r.cond).every(([t, a]) => (n.cons[t]||0) >= a*n.P);
+      if (ok) { n.st = 'done'; M.done += n.P; } else { n.st = 'lost'; M.lost += n.P; log('Узел: к концу рецепта не хватило конденсата — провал', 'e'); }
+    }
+  });
+  if (M.nodes.every(n => n.st === 'done' || n.st === 'lost')) finish();
+}
+function finish(){ log(`Партия: готово ${M.nodes.filter(n=>n.st==='done').reduce((s,n)=>s+n.P,0)}, потеряно ${M.nodes.filter(n=>n.st==='lost').reduce((s,n)=>s+n.P,0)} за ${fmtT(M.tick-M.t0)}`, M.nodes.some(n=>n.st==='lost') ? 'e' : 'g'); M.lastT = M.tick - M.t0; go(M.nodes.some(n => n.st === 'lost') ? 'HALT' : 'DRAIN'); }
+
+function updPanel(){
+  const o = M.order, run = M.phase === 'RUN';
+  $('vPh').textContent = M.phase;
+  if (o && run) { const r = o.r, len = r.dur/r.tiers.length; const live = M.nodes.filter(n => n.st === 'run' || n.st === 'wait'); const ref = live.reduce((a, b) => (a && a.prog <= b.prog) ? a : b, null); const need = ref ? r.tiers[Math.min(r.tiers.length-1, Math.floor(ref.prog/len))] : 0; $('vT').textContent = need ? need+' / '+(M.swapLeft ? '…' : M.prov) : '—'; }
+  else $('vT').textContent = '—';
+  const c = contaminants(); $('vC').textContent = c; $('vC').style.color = c > 3 ? 'var(--bad)' : c ? 'var(--warn)' : '';
+  $('vD').textContent = M.done+' / '+M.lost;
+  $('vTm').textContent = run ? fmtT(M.tick - M.t0) : M.lastT != null ? fmtT(M.lastT) : '—';
+  let eu = M.fieldPower ? M.cap : 0; eu += UIV;
+  if (run) eu += Math.min(o.MX, M.nodes.filter(n => n.st === 'run' || n.st === 'wait').reduce((s, n) => s + o.r.eut*n.P, 0));
+  if (M.entangling && M.ent && M.ent.cyc) eu += M.ent.cyc.eu;
+  $('vE').textContent = fmt(eu);
+  // узлы
+  const N = M.nodes;
+  $('nodes').innerHTML = Array.from({length:16}, (_, i) => { const n = N[i]; if (!n) return `<div class="nd off" title="${i < K ? 'простаивает' : 'не построен'}"><span>${i < K ? i+1 : '·'}</span></div>`;
+    const cls = {run:'run', wait:'wait', done:'', lost:'bad'}[n.st]; const pc = Math.min(100, n.prog/(o ? o.r.dur : 1)*100);
+    return `<div class="nd ${cls}" title="${n.why||''}"><i style="width:${pc}%"></i><span>${i+1}·P${n.P}</span></div>`; }).join('');
+  // поле
+  const tot = total();
+  $('fieldHead').textContent = `Поле удержания · ${fmt(tot)} / ${fmt(M.cap)} L` + (tot > M.cap ? ' · переполнение −10%/с' : '') + (M.fieldPower ? '' : ' · ОБЕСТОЧЕНО');
+  const rows = Object.entries(M.field).filter(([, v]) => v > 0).sort((a, b) => b[1]-a[1]);
+  const vis = new Set(visibleTypes());
+  $('fieldBars').innerHTML = rows.length ? rows.map(([t, v]) => `<div><em title="${CT(t)[0]}">${vis.has(t) ? '◉ ' : ''}${CT(t)[0]}</em><div class="bar"><i style="width:${Math.min(100, v/Math.max(1, M.cap)*100*4)}%;background:${CT(t)[1]}"></i></div><b>${fmt(v)} L</b></div>`).join('') : '<span class="small">пусто</span>';
+  $('aeFlows').innerHTML = AEFLOW.map(([k, t, c]) => { const on = flowOn[k](); return `<li style="opacity:${on ? 1 : .45}"><span style="color:${c}">${on ? '●' : '○'}</span><span>${t}</span></li>`; }).join('');
+  $('log').innerHTML = M.log.map(([t, s, c]) => `<div class="${c}">${t} · ${s}</div>`).join('');
+}
+
+// ---------- цикл ----------
+function resize(){ const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(stage);
+let last = performance.now(), acc = 0, animT = 0, panelT = 0;
+function loop(now){
+  const dt = Math.min(.1, (now-last)/1000); last = now;
+  if (fly) { const k = Math.min(1, (now - fly.t0)/900), e = k*k*(3-2*k); controls.target.lerpVectors(fly.fromT, fly.toT, e); camera.position.lerpVectors(fly.fromP, fly.toP, e); if (k >= 1) fly = null; }
+  controls.update();
+  // тики модели
+  acc += dt * 20 * M.speed; let n = 0;
+  while (acc >= 1 && n < 120000) { tickModel(); acc -= 1; n++; }
+  if (n >= 120000) acc = 0;
+  // анимация текстур (тик = 50 мс)
+  animT += dt*20;
+  for (const a of animated) { const f = Math.floor(animT / a.ft) % a.frames; a.t.offset.y = 1 - (f+1)/a.frames; }
+  // визуализация состояния
+  const run = M.phase === 'RUN';
+  for (const p of PL) {
+    if (!p.act) continue;
+    let on = false;
+    if (p.node != null) { const nd = M.nodes[p.node]; on = run && nd && nd.st === 'run'; }
+    else if (p.id === 'asm') on = run;
+    else if (p.id === 'field') on = M.fieldPower && total() > 0;
+    else if (p.id === 'diode') on = ['ROUTE','START','RUN'].includes(M.phase) || M.filterBad;
+    else if (p.id === 'gen') on = M.entangling;
+    p.act.visible = on && p.visibleFlag !== false;
+    if (p.beam) { const nd = M.nodes[p.node]; const act = run && nd && nd.st === 'run'; p.beam.material.opacity = act ? .55 + .25*Math.sin(now/120 + p.node) : .16; p.beam.visible = p.visibleFlag !== false && asmP().visibleFlag !== false; }
+  }
+  const drawR = run && M.nodes.some(nd => nd.st === 'run') && visibleTypes().length > 0;
+  flowStep(flows.R, drawR && pipeGroup.R.visible, dt);
+  flowStep(flows.L, drawR && pipeGroup.L.visible, dt);
+  flowStep(flows.G, M.entangling && pipeGroup.L.visible, dt);
+  aeStep(dt);
+  for (const q of pipeMeshes) { const act = q.net === 'R' ? drawR : (drawR || M.entangling); const mt = pipeMat(q.net, act); if (q.m.material !== mt) q.m.material = mt; }
+  renderer.render(scene, camera);
+  // подписи
+  const w = stage.clientWidth, h = stage.clientHeight, v = new THREE.Vector3();
+  for (const L of LABELS) { if (!L.on) continue; v.copy(L.v).project(camera); const vis = v.z < 1; L.el.style.visibility = vis ? 'visible' : 'hidden'; if (vis) { L.el.style.left = ((v.x+1)/2*w)+'px'; L.el.style.top = ((1-v.y)/2*h)+'px'; } }
+  panelT += dt; if (panelT > .12) { panelT = 0; updPanel(); }
+  requestAnimationFrame(loop);
+}
+applyPreset(4); est();
+}
+</script>
+</body>
+</html>
