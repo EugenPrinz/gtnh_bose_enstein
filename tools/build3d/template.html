@@ -404,13 +404,13 @@ const aeGroup = new THREE.Group(); scene.add(aeGroup);
 const AE_BLOCKS = [], AE_LINKS = [], AE_FLOWS = [];
 const WL = {white:'WL_on1', magenta:'WL_on3', cyan:'WL_on10', black:'WL_on16'}, HUB = {white:'WL_on18', magenta:'WL_on20', black:'WL_on33'};
 const AEFLOW = [
-  ['order',  'Mainnet → Pending: паттерн отправлен (Dual Interface, Blocking + Smart Blocking)', '#f2f2f2'],
+  ['order',  'Основная сеть → Pending: CPU выталкивает паттерн через Dual Interface (Blocking + Smart Blocking), сырьё списано', '#f2f2f2'],
   ['fluids', 'Pending → подсеть энтанглера: исходные жидкости (беспроводной коннектор, Insert Only)', '#9aa0aa'],
   ['shuttle','Pending → Input: ячейка с партией едет через IO Port и конвейеры (Redstone I/O)', '#d24fd8'],
   ['items',  'Input → узлы: Advanced Stocking Input Bus через беспроводные хабы', '#d24fd8'],
   ['nanIn',  'Наниты → шина Матрицы: фейковый крафт «нанит→нанит» на P2P Dual Interface', '#3fd0d0'],
   ['nanOut', 'Шина → наниты: storage bus Extract Only + IO Port, ячейку двигает Transposer', '#3fd0d0'],
-  ['output', 'Узлы → Mainnet: Output Bus (ME) через белые коннекторы', '#f2f2f2'],
+  ['output', 'Узлы → основная сеть: Output Bus (ME) → белые коннекторы → хаб, CPU закрывает крафт', '#f2f2f2'],
   ['back',   'Input → Pending: пустая ячейка возвращается, детектор предметов → Redstone I/O', '#d24fd8']];
 const flowOn = {
   order:()=>M.phase==='IDENTIFY', fluids:()=>['IDENTIFY','PLAN'].includes(M.phase) || (M.phase==='WAIT_CONDENSATE' && M.entangling),
@@ -419,6 +419,10 @@ const flowOn = {
   output:()=>M.phase==='DRAIN', back:()=>M.phase==='RETURN'};
 let AE_SUB = '';
 const AE_ROLE = {
+  'ME Controller (основная сеть)':'Контроллер основной сети базы. Здесь — условное место: линия подключается к ней только Dual Interface (заказ) и хабом выходов (результат).',
+  'ME Drive (сырьё)':'Запасы основной сети: исходные жидкости (расплавы, DSS, КГП…), предметы рецептов, наниты-ингредиенты. Большой запас сырья держать здесь — под учётом AE2.',
+  'Crafting CPU (основная сеть)':'CPU основной сети выполняет заказ: выталкивает паттерн BEC через Dual Interface в Pending и ждёт результат с узлов. Заказ — вручную, level maintainer или другой крафт.',
+  'Wireless Hub (выходы узлов)':'Белый хаб основной сети: к нему привязаны белые коннекторы Output Bus (ME) всех узлов (16 каналов из 32). Результат приходит сюда, CPU закрывает крафт.',
   'Dual Interface (mainnet)':'Держит умноженные паттерны BEC (вход — исходные жидкости и предметы). Blocking Card + Smart Blocking, повёрнут ключом в Pending.',
   'Dual Interface (копия)':'Те же паттерны без множителя, не в сети AE. Программа сравнивает с ними партию и считает число копий.',
   'Adapter → me_interface (копии паттернов)':'Адаптер OC: читает паттерны из соседнего Dual Interface.',
@@ -463,6 +467,12 @@ function aeLink(a, b, col, flow, rev){
   AE_LINKS.push({a, b, col, line});
   if (flow) aePath([rev ? B : A, rev ? A : B], flow, col);
 }
+function aeCable(a, b, col){
+  const A = new THREE.Vector3(a[0]+.5, a[1]+.5, a[2]+.5), B = new THREE.Vector3(b[0]+.5, b[1]+.5, b[2]+.5);
+  const g = new THREE.BufferGeometry().setFromPoints([A, new THREE.Vector3(A.x, .1, A.z), new THREE.Vector3(A.x, .1, B.z), new THREE.Vector3(B.x, .1, B.z), B]);
+  const line = new THREE.Line(g, new THREE.LineBasicMaterial({color:col, transparent:true, opacity:.5}));
+  aeGroup.add(line); AE_LINKS.push({a, b, col, line, base:.5});
+}
 const flowGeo = new THREE.SphereGeometry(.16, 8, 6);
 function aePath(pts, flow, col){
   const f = {flow, path:pts, parts:[]}; f.len = pts[0].distanceTo(pts[1]);
@@ -472,10 +482,17 @@ function aePath(pts, flow, col){
 const V3 = w => new THREE.Vector3(w[0]+.5, w[1]+.5, w[2]+.5);
 let AE_POS = {};
 function buildAE(){
-  AE_SUB = 'Mainnet / копии паттернов';
+  AE_SUB = 'Mainnet (основная сеть)';
+  aeBox([-36,0,12], 'AE_BlockControllerPowered', null, null, null, 'ME Controller (основная сеть)'); aeBox([-36,1,12], 'AE_BlockControllerColumnPowered', null, null, null, 'ME Controller (основная сеть)');
+  aeBox([-35,0,12], 'AE_BlockDriveSide', 'AE_BlockDrive', 'AE_BlockDriveFront', 'pz', 'ME Drive (сырьё)'); aeBox([-34,0,12], 'AE_BlockDriveSide', 'AE_BlockDrive', 'AE_BlockDriveFront', 'pz', 'ME Drive (сырьё)');
+  aeBox([-33,0,12], 'AE_BlockCraftingStorage16384k', null, null, null, 'Crafting CPU (основная сеть)'); aeBox([-32,0,12], 'AE_BlockCraftingAccelerator', null, null, null, 'Crafting CPU (основная сеть)'); aeBox([-33,1,12], 'AE_BlockCraftingAccelerator', null, null, null, 'Crafting CPU (основная сеть)');
+  aeBox([-30,0,12], HUB.white, null, null, null, 'Wireless Hub (выходы узлов)');
+  for (let i = 0; i < 4; i++) aeCable([-36,0,12], [-34+i,0,8], 0xf2f2f2);
+  aeCable([-36,0,12], [-30,0,12], 0xf2f2f2);
   // Mainnet: Dual Interface с умноженными паттернами, повёрнуты ключом в Pending
   for (let i = 0; i < 4; i++) aeBox([-34+i, 0, 8], 'FC_fluid_interface', null, null, null, 'Dual Interface (mainnet)');
   // копии паттернов без множителя: не в сети, рядом адаптеры OC
+  AE_SUB = 'не в сети AE (копии паттернов для OC)';
   for (let i = 0; i < 4; i++) { aeBox([-34+i, 0, 6], 'FC_fluid_interface', null, null, null, 'Dual Interface (копия)'); aeBox([-34+i, 1, 6], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → me_interface (копии паттернов)'); }
   // Pending (чёрная)
   AE_SUB = 'Pending (чёрная)';
@@ -512,18 +529,20 @@ function buildAE(){
   aeLink([-12,0,9], nW, 0x3fd0d0, 'nanIn'); aePath([V3(nW), V3([-12,0,9])], 'nanOut', 0x3fd0d0);
   AE_SUB = 'Input / Mainnet';
   // узлы: пурпурный коннектор у Advanced Stocking Input Bus, белый — у Output Bus (ME)
-  const mainC = [-32.5, 0, 8];
+  const mainC = [-30, 0, 12];
   PL.filter(p => p.node != null).forEach((p, i) => {
     const ib = SPEC.BEC_IO_NODE.find(e => e.k === 'inbus'), ob = SPEC.BEC_IO_NODE.find(e => e.k === 'outbus');
     const iw = add3(p.toW(ib.p), p.dirW(DIRL[ib.f])), ow = add3(p.toW(ob.p), p.dirW(DIRL[ob.f]));
     aeBox(iw, WL.magenta, null, null, null, 'Wireless Connector → Input'); aeBox(ow, WL.white, null, null, null, 'Wireless Connector → Mainnet');
     aeLink(hubs[i % 4], iw, 0xd24fd8, 'items'); aeLink(ow, mainC, 0xdddddd, 'output');
   });
-  aePath([V3([-33,0,8]), V3([-34,0,9])], 'order', 0xffffff);
+  aePath([V3([-33,0,12]), V3([-33,0,8])], 'order', 0xffffff); aePath([V3([-33,0,8]), V3([-34,0,9])], 'order', 0xffffff);
+  // доливка запаса конденсата из основной сети — открытый вопрос DESIGN.md
+  aeLink([-35,0,12], e2, 0x777777, null);
   aePath([V3([-29,1,9]), V3([-24,0,9])], 'shuttle', 0xd24fd8);
   aePath([V3([-24,0,9]), V3([-29,1,9])], 'back', 0xd24fd8);
-  AE_POS = {main:[-32.5,1.6,7], pend:[-31,1.8,9.5], input:[-22,2.6,9.5], nan:[-14,3.4,9.5], ent:add3(e2,[.5,1.6,.5]), nbus:add3(nW,[.5,1.6,.5])};
-  label('Mainnet: паттерны', AE_POS.main, '', 'ae'); label('Pending', AE_POS.pend, '', 'ae'); label('Input', AE_POS.input, '', 'ae');
+  AE_POS = {mainnet:[-33,2.6,12.5], main:[-32.5,1.6,7], pend:[-31,1.8,9.5], input:[-22,2.6,9.5], nan:[-14,3.4,9.5], ent:add3(e2,[.5,1.6,.5]), nbus:add3(nW,[.5,1.6,.5])};
+  label('Основная сеть', AE_POS.mainnet, '', 'ae'); label('Паттерны (Dual Interface)', AE_POS.main, '', 'ae'); label('доливка запаса — ?', [(-35+e2[0])/2, 2, (12+e2[2])/2], '', 'ae'); label('Pending', AE_POS.pend, '', 'ae'); label('Input', AE_POS.input, '', 'ae');
   label('Наниты', AE_POS.nan, '', 'ae'); label('Подсеть энтанглера', AE_POS.ent, '', 'ae'); label('Storage bus на шине нанитов', AE_POS.nbus, '', 'ae');
 }
 function aeStep(dt){
@@ -609,6 +628,7 @@ const STEPS = [
   {t:'Узлы 9–12 · сверху', show:['field','gen','diode','pL','asm','pR','g0','g1','g2'], grp:2, st:'n8', note:()=>nodeNote('сверху: узел лежит, контроллер смотрит вверх, люк LoS — вниз. GT разрешает любые повороты, кроме вертикального переворота.', 2)},
   {t:'Узлы 13–16 · снизу', show:['field','gen','diode','pL','asm','pR','g0','g1','g2','g3'], grp:3, st:'n12', note:()=>nodeNote('снизу: контроллер смотрит в землю, под ним — адаптер OC на земле. Только с нижними узлами Матрицу приходится поднимать на 17 блоков; до 12 узлов она стоит на земле.', 3)},
   {t:'OpenComputers', show:'all', cam:()=>[[-14,2,-2], 45, [.5,.5,.7]], note:()=>`<p>Адаптер OC вплотную к контроллеру: ${K} узл., затвор, поле. Зелёным: <b>сплошные</b> — кабель OC от стойки (Redstone I/O, адаптеры копий паттернов, адаптер Input, адаптер и Transposer нанитов, вход OC P2P); <b>пунктир</b> — ME P2P (OpenComputers) через Input-подсеть к адаптерам у мультиблоков, как у Armisael5.</p><p>Кликни по блоку — карточка покажет, что это и какой компонент OC он даёт.</p><p>Стойка (сервер T4, Component Bus Creative, Internet Card) у затвора: компонентов ≈ ${K+11}, обычный ПК столько не держит. Redstone I/O управляет челноком ячеек AE2.</p>`},
+  {t:'AE2 · основная сеть', show:'all', cam:()=>[[-33,1,10], 30, [.3,.55,.8]], note:()=>`<p>С линией основная сеть связана <b>только в двух местах</b>:</p><ul><li><b>Заказ</b> — Dual Interface с умноженными паттернами BEC (кабелем от основной сети, ключом в Pending). CPU выталкивает предметы и исходные жидкости, сырьё списывается из запасов.</li><li><b>Результат</b> — белый хаб: к нему привязаны коннекторы Output Bus (ME) всех ${K} узл. (${K} каналов из 32). Готовое приходит сюда, CPU закрывает крафт.</li></ul><p>Запасы сырья (расплавы, DSS, предметы, наниты-ингредиенты) лежат в основной сети. Pending, Input, наниты и подсеть энтанглера к ней <b>не подключены</b>.</p><p class="small">Серый пунктир «доливка запаса» — открытый вопрос DESIGN.md: чем программа будет переносить точные порции расплавов в подсеть энтанглера.</p>`},
   {t:'AE2 · Pending и челнок', show:'all', cam:()=>[[-31,1,8], 26, [.35,.55,.75]], note:()=>`<p><b>Mainnet</b>: Dual Interface с <b>умноженными</b> паттернами BEC (вход — исходные жидкости, не запутанные), Blocking Card + Smart Blocking, ключом повернуть в Pending. Рядом — такие же Dual Interface <b>не в сети</b> с <b>немножёнными</b> копиями и адаптерами OC: по ним программа считает число копий.</p><p><b>Pending</b> (чёрная): ME Controller, 2 ME Drive, беспроводной коннектор к энтанглеру, 2 IO Port (3× Superluminal Acceleration Card, «Move to output when cell/network is empty»), 2 корпуса машины с конвейерами UEV и Machine Controller cover, Redstone I/O на красном сплаве. В верхний IO Port — ячейка 16384k (для крафтов Врат — Artificial Universe cell).</p>`},
   {t:'AE2 · Input → узлы', show:'all', cam:()=>[[-10,8,4], 70, [.55,.5,.75]], note:()=>`<p><b>Input</b> (пурпурная): ME Controller, обычный (не Dual) ME Interface + адаптер, 2 ME Drive, 4 беспроводных хаба для узлов + 1 хаб для OC P2P к затвору и полю.</p><p>На каждом узле: пурпурный коннектор → <b>Advanced Stocking Input Bus</b> (включить, refresh 5 тиков), белый коннектор → <b>Output Bus (ME)</b> в Mainnet. Коннекторы узлов делить поровну между 4 хабами.</p><p>Корпус со storage bus на Input (высокий приоритет) и Item Detector cover → Redstone I/O: сигнал «ячейка пуста».</p>`},
   {t:'AE2 · подсеть энтанглера', show:'all', cam:()=>[add3(AE_POS.ent,[0,-1,0]), 28, [.6,.5,.7]], note:()=>`<p>На энтанглере — Advanced Stocking Input Hatch. Отдельная маленькая подсеть: 2 ME Drive (жидкостные ячейки) + Fluid Storage Bus <b>Insert Only</b>, к ней — беспроводной коннектор от Pending: жидкости из паттерна сразу уходят сюда.</p><p>Основная сеть сюда <b>не подключается</b>: энтанглер запутает всё, что видит. Запас (passive) — класть в эту подсеть порциями (DESIGN.md §1.2a).</p>`},
