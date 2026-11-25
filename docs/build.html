@@ -31,6 +31,13 @@ body{background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-se
 .legend{position:absolute;left:16px;bottom:14px;display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);pointer-events:none}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 .loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font:600 15px Inter}
+.info{position:absolute;right:14px;bottom:40px;width:min(360px,calc(100% - 28px));background:rgba(14,18,28,.95);border:1px solid var(--acc);border-radius:8px;padding:10px 12px 12px;font-size:13.5px;line-height:1.45}
+.info h3{margin:0 30px 6px 0;font:600 16px/1.2 "Chakra Petch",sans-serif}
+.info .what{margin:0 0 8px}
+.info dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;margin:0}
+.info dt{color:var(--dim)}.info dd{margin:0;font-variant-numeric:tabular-nums}
+.info .x{position:absolute;top:6px;right:6px;min-height:32px;width:32px;padding:0;font-size:18px;line-height:1}
+.info .go{margin-top:8px;min-height:34px}
 .side{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:14px 16px 28px}
 .sec{margin-bottom:18px}
 .sec h2{font:600 16px/1.2 "Chakra Petch",sans-serif;margin:0 0 8px;color:var(--acc)}
@@ -92,7 +99,8 @@ kbd{font:12px Inter;background:#1d2536;border:1px solid var(--line);border-radiu
   <div class="stage" id="stage">
     <div class="labels" id="labels"></div>
     <div class="hud"><h1>Линия BEC</h1><div class="sub">Постройка и модель работы · GTNH 2.9.1 (GT5U 5.09.54.275) · программа BEC 0.0 (дизайн)</div></div>
-    <div class="legend"><span><i style="background:var(--left)"></i>левая сеть (хранение)</span><span><i style="background:var(--right)"></i>правая сеть (сборка)</span><span><i style="background:var(--acc)"></i>луч LoS</span><span><i style="background:#d24fd8"></i>AE2 Input</span><span><i style="background:#3fd0d0"></i>AE2 наниты</span><span>ЛКМ — вращать, ПКМ — сдвиг, колесо — зум</span></div>
+    <div class="legend"><span><i style="background:var(--left)"></i>левая сеть (хранение)</span><span><i style="background:var(--right)"></i>правая сеть (сборка)</span><span><i style="background:var(--acc)"></i>луч LoS</span><span><i style="background:#d24fd8"></i>AE2 Input</span><span><i style="background:#3fd0d0"></i>AE2 наниты</span><span><i style="background:#8cff9a"></i>OC: кабель / P2P</span><span>ЛКМ — вращать, клик — что за блок, ПКМ — сдвиг</span></div>
+    <div class="info" id="info" hidden><button class="x" id="infoX" aria-label="Закрыть">×</button><div id="infoBody"></div></div>
     <div class="loading" id="loading">Собираю 22 тысячи блоков…</div>
   </div>
   <aside class="side">
@@ -333,7 +341,7 @@ function buildPlacement(p, maxZ){
       }
     }
   }
-  const g = new THREE.Group(); meshFrom(bufs, g); return g;
+  const g = new THREE.Group(); meshFrom(bufs, g); g.children.forEach(m => { m.userData.pick = true; m.userData.pl = p; }); return g;
 }
 
 // ---------- кондуиты двух сетей ----------
@@ -362,6 +370,7 @@ function buildPipes(){
     for (const [x,y,z,sx,sy,sz] of parts) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), pipeMat(q.net, false));
       m.position.set(q.w[0]+.5+x, q.w[1]+.5+y, q.w[2]+.5+z); pipeGroup[q.net].add(m); pipeMeshes.push({m, net:q.net});
+      m.userData = {pick:true, w:q.w, info:{t:'Кондуит конденсата Бозе-Эйнштейна', what:q.net === 'L' ? 'Левая сеть (оранжевая): затвор (вход) — Поле — энтанглер.' : 'Правая сеть (синяя): затвор (выход) — Матрица.', rows:[['Соединяется', 'только с кондуитами и шлюзами своего цвета'], ['Энергия', 'не передаёт']]}};
     }
   }
 }
@@ -371,9 +380,24 @@ const ocGroup = new THREE.Group();
 function ocMat(n){ return matCache['oc'+n] || (matCache['oc'+n] = new THREE.MeshLambertMaterial({map:mkTex(tinted(IMG[n]))})); }
 function ocCube(w, side, top, front, frontDir){
   const mats = ['px','nx','py','ny','pz','nz'].map(f => ocMat(f === frontDir ? front : (f === 'py' || f === 'ny') ? top : side));
-  const m = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mats); m.position.set(w[0]+.5, w[1]+.5, w[2]+.5); return m;
+  const m = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mats); m.position.set(w[0]+.5, w[1]+.5, w[2]+.5); m.userData = {pick:true, w}; return m;
 }
 const ADAPTERS = [];
+
+// ---------- связи OC: кабель от стойки, P2P к адаптерам у мультиблоков ----------
+const OC_LINKS = [];
+function ocLine(a, b, dashed){
+  const A = new THREE.Vector3(a[0]+.5, a[1]+.5, a[2]+.5), B = new THREE.Vector3(b[0]+.5, b[1]+.5, b[2]+.5);
+  const g = new THREE.BufferGeometry().setFromPoints(dashed ? [A, B] : [A, new THREE.Vector3(A.x, .15, A.z), new THREE.Vector3(B.x, .15, A.z), new THREE.Vector3(B.x, .15, B.z), B]);
+  const mat = dashed ? new THREE.LineDashedMaterial({color:0x8cff9a, dashSize:.5, gapSize:.5, transparent:true, opacity:.35}) : new THREE.LineBasicMaterial({color:0x8cff9a, transparent:true, opacity:.6});
+  const line = new THREE.Line(g, mat); if (dashed) line.computeLineDistances();
+  ocGroup.add(line); OC_LINKS.push({a, b, line, base:mat.opacity});
+}
+function buildOCLinks(){
+  const R = [-14,1,-4], P2P = [-26,0,9];
+  for (const t of [[-28,0,9], [-34,1,6], [-33,1,6], [-32,1,6], [-31,1,6], [-23,1,9], [-16,1,9], [-15,1,9], P2P]) ocLine(R, t, false);
+  for (const a of ADAPTERS) ocLine(P2P, a.w, true);
+}
 
 // ---------- AE2: подсети по схеме Armisael5 (gtnh-bec-controller) ----------
 const aeGroup = new THREE.Group(); scene.add(aeGroup);
@@ -393,12 +417,40 @@ const flowOn = {
   shuttle:()=>M.phase==='START' && M.phaseT < 12, items:()=>M.phase==='START',
   nanIn:()=>M.phase==='START' || (M.phase==='RUN' && M.swapLeft > 0), nanOut:()=>M.phase==='DRAIN',
   output:()=>M.phase==='DRAIN', back:()=>M.phase==='RETURN'};
+let AE_SUB = '';
+const AE_ROLE = {
+  'Dual Interface (mainnet)':'Держит умноженные паттерны BEC (вход — исходные жидкости и предметы). Blocking Card + Smart Blocking, повёрнут ключом в Pending.',
+  'Dual Interface (копия)':'Те же паттерны без множителя, не в сети AE. Программа сравнивает с ними партию и считает число копий.',
+  'Adapter → me_interface (копии паттернов)':'Адаптер OC: читает паттерны из соседнего Dual Interface.',
+  'ME Controller':'Контроллер своей подсети. Цвет кабеля у каждой подсети свой, чтобы они не слились.',
+  'ME Drive':'Диск подсети.',
+  'Wireless Connector → энтанглер':'Связывает Pending с подсетью энтанглера: жидкости из паттерна сразу уходят туда.',
+  'ME IO Port':'Челнок: «Move to output when cell/network is empty», 3× Superluminal Acceleration Card.',
+  'Machine Hull':'Корпус машины с конвейером UEV и Machine Controller cover: двигает ячейку между IO Port по сигналу Redstone I/O.',
+  'Redstone I/O':'Компонент OC redstone: программа даёт импульс челноку ячеек и читает детектор предметов.',
+  'Hull + Item Detector (storage bus Input)':'Storage bus на Input (высокий приоритет) + Item Detector cover → Redstone I/O: «ячейка пуста».',
+  'ME Interface':'Обычный (не Dual) интерфейс Input-подсети: через адаптер программа видит, что пришло в партии.',
+  'Adapter → me_interface (Input)':'Адаптер OC: содержимое Input-подсети (что пришло в партии).',
+  'Wireless Hub':'Беспроводной хаб: к нему привязаны пурпурные коннекторы узлов (делить поровну между 4 хабами).',
+  'Wireless Hub (OC P2P к затвору и полю)':'Хаб для коннекторов, через которые идёт OC P2P к адаптерам затвора и поля.',
+  'ME P2P (OpenComputers) — вход':'Вход OC P2P-тоннелей: от стойки сюда один кабель, дальше сигнал OC идёт по сети AE к адаптерам узлов, затвора и поля.',
+  'Adapter → me_controller (наниты)':'Адаптер OC у контроллера подсети нанитов: сколько нанитов каждого тира на складе, заказ фейкового крафта.',
+  'Transposer':'Компонент OC transposer: перекладывает ячейку между двумя IO Port, чтобы вынуть наниты из шины.',
+  'P2P Dual Interface + Fake Crafting Card':'10 паттернов «нанит → нанит», выход переименован в номер тира. Обычный Blocking, не Smart.',
+  'Crafting Storage':'Процессор крафта для фейкового крафта нанитов.', 'Co-Processor':'Ускоряет фейковый крафт.',
+  'Wireless Connector → шина нанитов':'Связывает подсеть нанитов с шиной Матрицы.',
+  'Fluid Storage Bus (Insert Only)':'Только вставка: жидкости из Pending попадают на диски подсети энтанглера, обратно не уходят.',
+  'Wireless Connector ← Pending':'Приёмник жидкостей заказа от Pending.',
+  'Wireless Connector + Storage Bus (двусторонний)':'Двусторонний storage bus на Nanite Containment Bus: шина становится хранилищем подсети нанитов.',
+  'Wireless Connector → Input':'Пурпурный коннектор: Advanced Stocking Input Bus узла видит Input-подсеть (refresh 5 тиков).',
+  'Wireless Connector → Mainnet':'Белый коннектор: Output Bus (ME) узла сдаёт результат в основную сеть.'};
+const AE_COMP = {'Adapter → me_interface (копии паттернов)':'me_interface', 'Adapter → me_interface (Input)':'me_interface', 'Adapter → me_controller (наниты)':'me_controller', 'Transposer':'transposer', 'Redstone I/O':'redstone'};
 function ovlMat(base, ovl){ const k = 'ovl'+base+ovl; return matCache[k] || (matCache[k] = new THREE.MeshLambertMaterial({map:mkTex(composite(base, [[ovl]]))})); }
 function aeBox(w, side, top, front, dir, name){
   const mm = n => typeof n === 'string' ? ocMat(n) : n;
   const mats = ['px','nx','py','ny','pz','nz'].map(f => mm(f === dir && front ? front : (f === 'py' || f === 'ny') ? (top || side) : side));
   const m = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mats); m.position.set(w[0]+.5, w[1]+.5, w[2]+.5);
-  aeGroup.add(m); AE_BLOCKS.push({w, name}); return m;
+  aeGroup.add(m); AE_BLOCKS.push({w, name}); m.userData = {pick:true, w, info:{t:name, what:AE_ROLE[name] || '', rows:[['Подсеть AE2', AE_SUB]].concat(AE_COMP[name] ? [['Компонент OC', AE_COMP[name]]] : [])}}; return m;
 }
 const DRIVE = w => aeBox(w, 'AE_BlockDriveSide', 'AE_BlockDrive', 'AE_BlockDriveFront', 'pz', 'ME Drive');
 const IOP = w => aeBox(w, 'AE_BlockIOPortSide', 'AE_BlockIOPort', null, null, 'ME IO Port');
@@ -420,26 +472,32 @@ function aePath(pts, flow, col){
 const V3 = w => new THREE.Vector3(w[0]+.5, w[1]+.5, w[2]+.5);
 let AE_POS = {};
 function buildAE(){
+  AE_SUB = 'Mainnet / копии паттернов';
   // Mainnet: Dual Interface с умноженными паттернами, повёрнуты ключом в Pending
   for (let i = 0; i < 4; i++) aeBox([-34+i, 0, 8], 'FC_fluid_interface', null, null, null, 'Dual Interface (mainnet)');
   // копии паттернов без множителя: не в сети, рядом адаптеры OC
-  for (let i = 0; i < 4; i++) { aeBox([-34+i, 0, 6], 'FC_fluid_interface', null, null, null, 'Dual Interface (копия)'); aeBox([-34+i, 1, 6], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter'); }
+  for (let i = 0; i < 4; i++) { aeBox([-34+i, 0, 6], 'FC_fluid_interface', null, null, null, 'Dual Interface (копия)'); aeBox([-34+i, 1, 6], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → me_interface (копии паттернов)'); }
   // Pending (чёрная)
+  AE_SUB = 'Pending (чёрная)';
   aeBox([-34,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); DRIVE([-33,0,9]); DRIVE([-32,0,9]);
   aeBox([-31,0,9], WL.black, null, null, null, 'Wireless Connector → энтанглер');
   IOP([-30,0,9]); HULL([-30,1,9], 'GT_OVERLAY_CONVEYOR', 'pz'); HULL([-29,0,9], 'GT_OVERLAY_CONVEYOR', 'pz'); IOP([-29,1,9]);
   aeBox([-28,0,9], 'OC_RedstoneSouth', 'OC_RedstoneTop', null, null, 'Redstone I/O');
   aeBox([-27,0,9], 'GT_MACHINE_UEV_SIDE', 'GT_MACHINE_UEV_TOP', ovlMat('GT_MACHINE_UEV_SIDE', 'GT_OVERLAY_ACTIVITYDETECTOR'), 'nx', 'Hull + Item Detector (storage bus Input)');
   // Input (пурпурная)
-  aeBox([-24,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); aeBox([-23,0,9], 'AE_BlockInterface', null, null, null, 'ME Interface'); aeBox([-23,1,9], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter');
+  AE_SUB = 'Input (пурпурная)';
+  aeBox([-24,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); aeBox([-23,0,9], 'AE_BlockInterface', null, null, null, 'ME Interface'); aeBox([-23,1,9], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → me_interface (Input)');
+  aeBox([-26,0,9], 'OC_GenericTop', 'OC_GenericTop', null, null, 'ME P2P (OpenComputers) — вход');
   DRIVE([-22,0,9]); DRIVE([-21,0,9]);
   const hubs = [[-24,1,9], [-22,1,9], [-21,1,9], [-20,1,9]]; hubs.forEach(h => aeBox(h, HUB.magenta, null, null, null, 'Wireless Hub'));
   aeBox([-20,0,9], HUB.magenta, null, null, null, 'Wireless Hub (OC P2P к затвору и полю)');
   // Наниты (бирюзовая)
-  aeBox([-16,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); IOP([-15,0,9]); aeBox([-15,1,9], 'OC_TransposerSide', 'OC_TransposerTop', null, null, 'Transposer'); IOP([-15,2,9]);
+  AE_SUB = 'Наниты (бирюзовая)';
+  aeBox([-16,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); aeBox([-16,1,9], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → me_controller (наниты)'); IOP([-15,0,9]); aeBox([-15,1,9], 'OC_TransposerSide', 'OC_TransposerTop', null, null, 'Transposer'); IOP([-15,2,9]);
   DRIVE([-14,0,9]); aeBox([-14,1,9], 'FC_fluid_interface', null, null, null, 'P2P Dual Interface + Fake Crafting Card');
   aeBox([-13,0,9], 'AE_BlockCraftingStorage16384k', null, null, null, 'Crafting Storage'); aeBox([-13,1,9], 'AE_BlockCraftingAccelerator', null, null, null, 'Co-Processor');
   aeBox([-12,0,9], WL.cyan, null, null, null, 'Wireless Connector → шина нанитов');
+  AE_SUB = 'Подсеть энтанглера';
   // подсеть энтанглера: у входного шлюза (Advanced Stocking Input Hatch)
   const gen = PL.find(p => p.id === 'gen'), gi = SPEC.BEC_GENERATOR.find(e => e.k === 'inhatch');
   const gD = gen.dirW(DIRL[gi.f]), gW = gen.toW(gi.p), lat = gD[2] ? [1,0,0] : [0,0,1];
@@ -448,9 +506,11 @@ function buildAE(){
   aeBox(e2, WL.black, null, null, null, 'Wireless Connector ← Pending');
   aeLink([-31,0,9], e2, 0x9aa0aa, 'fluids');
   // storage bus на шине нанитов Матрицы
+  AE_SUB = 'Наниты (бирюзовая)';
   const asm = asmP(), ni = SPEC.BEC_ASSEMBLER.find(e => e.k === 'nanite'), nW = add3(asm.toW(ni.p), asm.dirW(DIRL[ni.f]));
   aeBox(nW, WL.cyan, null, null, null, 'Wireless Connector + Storage Bus (двусторонний)');
   aeLink([-12,0,9], nW, 0x3fd0d0, 'nanIn'); aePath([V3(nW), V3([-12,0,9])], 'nanOut', 0x3fd0d0);
+  AE_SUB = 'Input / Mainnet';
   // узлы: пурпурный коннектор у Advanced Stocking Input Bus, белый — у Output Bus (ME)
   const mainC = [-32.5, 0, 8];
   PL.filter(p => p.node != null).forEach((p, i) => {
@@ -475,14 +535,15 @@ function aeStep(dt){
 
 
 // ---------- лучи LoS ----------
-const beams = [];
+const beams = []; let LOS_OF = {};
 function buildBeams(){
+  LOS_OF = {};
   const asm = PL.find(p => p.id === 'asm'), losA = SPEC.BEC_ASSEMBLER.filter(e => e.k === 'los').map(e => ({w:asm.toW(e.p), d:faceDirName(asm.dirW(DIRL[e.f]))}));
   for (const p of PL.filter(p => p.node != null)) {
     const e = SPEC.BEC_IO_NODE.find(e => e.k === 'los'), w = p.toW(e.p), d = faceDirName(p.dirW(DIRL[e.f]));
     p.losW = {w, d};
     const a = losA.find(a => { const t = add3(a.w, mul3(DIRL[a.d], 1)); const v = [w[0]-a.w[0], w[1]-a.w[1], w[2]-a.w[2]], n = Math.hypot(...v); return n > 0 && Math.abs((v[0]*DIRL[a.d][0]+v[1]*DIRL[a.d][1]+v[2]*DIRL[a.d][2]) - n) < 1e-6; });
-    p.losPair = a;
+    p.losPair = a; if (a) LOS_OF[key(a.w)] = p;
     if (!a) continue;
     const A = new THREE.Vector3(a.w[0]+.5, a.w[1]+.5, a.w[2]+.5), B = new THREE.Vector3(w[0]+.5, w[1]+.5, w[2]+.5);
     const len = A.distanceTo(B) - 1;
@@ -547,7 +608,7 @@ const STEPS = [
   {t:'Узлы 5–8 · сзади', show:['field','gen','diode','pL','asm','pR','g0','g1'], grp:1, st:'n4', note:()=>nodeNote('сзади — зеркально передним.', 1)},
   {t:'Узлы 9–12 · сверху', show:['field','gen','diode','pL','asm','pR','g0','g1','g2'], grp:2, st:'n8', note:()=>nodeNote('сверху: узел лежит, контроллер смотрит вверх, люк LoS — вниз. GT разрешает любые повороты, кроме вертикального переворота.', 2)},
   {t:'Узлы 13–16 · снизу', show:['field','gen','diode','pL','asm','pR','g0','g1','g2','g3'], grp:3, st:'n12', note:()=>nodeNote('снизу: контроллер смотрит в землю, под ним — адаптер OC на земле. Только с нижними узлами Матрицу приходится поднимать на 17 блоков; до 12 узлов она стоит на земле.', 3)},
-  {t:'OpenComputers', show:'all', cam:()=>[[-14,2,-2], 45, [.5,.5,.7]], note:()=>`<p>Адаптер OC вплотную к контроллеру: ${K} узл., затвор, поле. До узлов — ME P2P (OC) от Input-подсети, как у Armisael5.</p><p>Стойка (сервер T4, Component Bus Creative, Internet Card) у затвора: компонентов ≈ ${K+11}, обычный ПК столько не держит. Redstone I/O управляет челноком ячеек AE2.</p>`},
+  {t:'OpenComputers', show:'all', cam:()=>[[-14,2,-2], 45, [.5,.5,.7]], note:()=>`<p>Адаптер OC вплотную к контроллеру: ${K} узл., затвор, поле. Зелёным: <b>сплошные</b> — кабель OC от стойки (Redstone I/O, адаптеры копий паттернов, адаптер Input, адаптер и Transposer нанитов, вход OC P2P); <b>пунктир</b> — ME P2P (OpenComputers) через Input-подсеть к адаптерам у мультиблоков, как у Armisael5.</p><p>Кликни по блоку — карточка покажет, что это и какой компонент OC он даёт.</p><p>Стойка (сервер T4, Component Bus Creative, Internet Card) у затвора: компонентов ≈ ${K+11}, обычный ПК столько не держит. Redstone I/O управляет челноком ячеек AE2.</p>`},
   {t:'AE2 · Pending и челнок', show:'all', cam:()=>[[-31,1,8], 26, [.35,.55,.75]], note:()=>`<p><b>Mainnet</b>: Dual Interface с <b>умноженными</b> паттернами BEC (вход — исходные жидкости, не запутанные), Blocking Card + Smart Blocking, ключом повернуть в Pending. Рядом — такие же Dual Interface <b>не в сети</b> с <b>немножёнными</b> копиями и адаптерами OC: по ним программа считает число копий.</p><p><b>Pending</b> (чёрная): ME Controller, 2 ME Drive, беспроводной коннектор к энтанглеру, 2 IO Port (3× Superluminal Acceleration Card, «Move to output when cell/network is empty»), 2 корпуса машины с конвейерами UEV и Machine Controller cover, Redstone I/O на красном сплаве. В верхний IO Port — ячейка 16384k (для крафтов Врат — Artificial Universe cell).</p>`},
   {t:'AE2 · Input → узлы', show:'all', cam:()=>[[-10,8,4], 70, [.55,.5,.75]], note:()=>`<p><b>Input</b> (пурпурная): ME Controller, обычный (не Dual) ME Interface + адаптер, 2 ME Drive, 4 беспроводных хаба для узлов + 1 хаб для OC P2P к затвору и полю.</p><p>На каждом узле: пурпурный коннектор → <b>Advanced Stocking Input Bus</b> (включить, refresh 5 тиков), белый коннектор → <b>Output Bus (ME)</b> в Mainnet. Коннекторы узлов делить поровну между 4 хабами.</p><p>Корпус со storage bus на Input (высокий приоритет) и Item Detector cover → Redstone I/O: сигнал «ячейка пуста».</p>`},
   {t:'AE2 · подсеть энтанглера', show:'all', cam:()=>[add3(AE_POS.ent,[0,-1,0]), 28, [.6,.5,.7]], note:()=>`<p>На энтанглере — Advanced Stocking Input Hatch. Отдельная маленькая подсеть: 2 ME Drive (жидкостные ячейки) + Fluid Storage Bus <b>Insert Only</b>, к ней — беспроводной коннектор от Pending: жидкости из паттерна сразу уходят сюда.</p><p>Основная сеть сюда <b>не подключается</b>: энтанглер запутает всё, что видит. Запас (passive) — класть в эту подсеть порциями (DESIGN.md §1.2a).</p>`},
@@ -579,17 +640,24 @@ function buildWorld(){
   buildBeams();
   for (const p of PL) activePlane(p);
   // адаптеры перед контроллерами
+  const COMP = {BEC_IO_NODE:'bec_io_node', BEC_DIODE:'bec_diode', BEC_CONTAINMENT_FIELD:'bec_storage'};
   for (const p of PL.filter(p => p.id !== 'asm' && p.id !== 'gen')) {
     const w = add3(p.ctrlW.w, DIRL[p.ctrlW.d]);
     const a = ocCube(w, 'OC_AdapterSide', 'OC_AdapterTop', 'OC_AdapterSide'); ocGroup.add(a); ADAPTERS.push({p, w});
+    a.userData.info = {t:'Adapter → '+COMP[p.st], what:'Адаптер OC вплотную к контроллеру: '+p.title+'. Связь со стойкой — ME P2P (OpenComputers) через Input-подсеть.',
+      rows:[['Компонент OC', COMP[p.st]], ['Методы', {bec_io_node:'getState, getRecipeSteps, getRequiredTier, set{Min,Max}Parallel, setWorkAllowed…', bec_diode:'get/setCondensateFilter(s), setWorkAllowed', bec_storage:'get/setFieldStrength, getStoredCondensate'}[COMP[p.st]]]]};
   }
-  ocGroup.add(ocCube([-14,0,-4], 'OC_RackSide', 'OC_GenericTop', 'OC_RackFront', 'pz'));
-  ocGroup.add(ocCube([-14,1,-4], 'OC_RackSide', 'OC_GenericTop', 'OC_ServerFrontOn', 'pz'));
-  ocGroup.add(ocCube([-13,0,-4], 'OC_RedstoneSouth', 'OC_RedstoneTop', 'OC_RedstoneSouth', 'pz'));
+  const rack = ocCube([-14,0,-4], 'OC_RackSide', 'OC_GenericTop', 'OC_RackFront', 'pz'), srv = ocCube([-14,1,-4], 'OC_RackSide', 'OC_GenericTop', 'OC_ServerFrontOn', 'pz');
+  const rackInfo = {t:'Стойка OC с сервером', what:'Сервер T4: CPU T3, GPU T3, Magical Memory, Component Bus (Creative), HDD T3, Internet Card. Экран T3 и клавиатура рядом.', rows:[['Компонентов', '≈ '+(K+11)], ['Кабелем', 'Redstone I/O, 4 адаптера копий паттернов, адаптер Input, адаптер и Transposer нанитов, вход OC P2P'], ['Через P2P', 'адаптеры '+K+' узл., затвора и поля']]};
+  rack.userData.info = srv.userData.info = rackInfo;
+  ocGroup.add(rack, srv);
+  OC_LINKS.length = 0;
   initFlows();
   buildAE();
+  buildOCLinks();
   for (const p of PL) { const c = centerOf(p); label(p.title, [c[0], c[1]+1.5, c[2]], p.net || '', p.id); }
   label('Стойка OC', [-13.5, 2.6, -3.5], '', 'oc');
+  label('OC P2P', [-25.5, 1.6, 9.5], '', 'ae');
   const d = PL.find(p => p.id === 'diode');
   label('вход', d.toW([0,6.6,5]), 'L', 'diode');
   label('выход', add3(d.toW([16,6.6,5]), [1,0,0]), 'R', 'diode');
@@ -952,6 +1020,61 @@ function updPanel(){
   $('aeFlows').innerHTML = AEFLOW.map(([k, t, c]) => { const on = flowOn[k](); return `<li style="opacity:${on ? 1 : .45}"><span style="color:${c}">${on ? '●' : '○'}</span><span>${t}</span></li>`; }).join('');
   $('log').innerHTML = M.log.map(([t, s, c]) => `<div class="${c}">${t} · ${s}</div>`).join('');
 }
+
+// ---------- клик по блоку ----------
+const KIND = {
+  ctrl:p => ({BEC_IO_NODE:'Контроллер узла телепортации · OC: bec_io_node', BEC_DIODE:'Контроллер Затвора Максвелла · OC: bec_diode', BEC_CONTAINMENT_FIELD:'Контроллер Поля удержания · OC: bec_storage', BEC_ASSEMBLER:'Контроллер Матрицы наблюдения · OC-методов нет', BEC_GENERATOR:'Контроллер энтанглера · OC-методов нет'}[p.st]),
+  bec:p => p.st === 'BEC_DIODE' ? 'Шлюз конденсата — выход (правый), синяя сеть' : 'Шлюз конденсата — '+(p.net === 'L' ? 'левая (оранжевая)' : 'правая (синяя)')+' сеть. Красить в цвет кондуита',
+  becin:() => 'Шлюз конденсата — вход (левый), оранжевая сеть',
+  los:(p, l, w) => p.node != null ? 'Люк прямой видимости → Матрица, '+G+' блоков. Повернуть ключом к люку Матрицы' : 'Люк прямой видимости → '+((LOS_OF[key(w)] || {}).title || 'узла нет'),
+  energy:p => 'Энергошлюз (любой тир, считается сумма V×A): '+({BEC_DIODE:'≥ 31 457 280 EU/t', BEC_CONTAINMENT_FIELD:'≥ напряжённости поля (1 L = 1 EU/t)', BEC_ASSEMBLER:'≥ Σ EU/t работающих узлов', BEC_GENERATOR:'больше EU — быстрее запутывание'}[p.st]),
+  nanite:() => 'Nanite Containment Bus: тир = самый низкий из непустых шин, наниты не расходуются, ≤ 30 720',
+  inbus:() => 'Advanced Stocking Input Bus (ME) ← Input-подсеть, refresh 5 тиков',
+  outbus:() => 'Output Bus (ME) → Mainnet',
+  ctrlhatch:() => 'Люк контроллера узла: режим «пауза» (не «параллели» — он перекрывает OC)',
+  detector:() => 'Детектор конденсата: редстоун по типу, сравнению и порогу',
+  inhatch:() => 'Advanced Stocking Input Hatch (ME) ← подсеть энтанглера'};
+const SLOTS = {BEC_GENERATOR:'энергия, входной шлюз/шина (до 16)', BEC_CONTAINMENT_FIELD:'энергия, Детектор конденсата (до 42)', BEC_ASSEMBLER:'энергия, Nanite Containment Bus (до 16)', BEC_DIODE:'энергия, входной шлюз жидкости = фильтр (до 16)', BEC_IO_NODE:'Input/Output Bus, Люк контроллера, Детектор нанитов (до 32)'};
+const dot3 = (a, b) => a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+function mbInfo(p, w){
+  const d = [w[0]-p.aW[0], w[1]-p.aW[1], w[2]-p.aW[2]], l = [dot3(d, p.R)+p.aL[0], dot3(d, p.U)+p.aL[1], dot3(d, p.B)+p.aL[2]];
+  const gr = GRID[p.st], c = gr.m.get(key(l)), sp = gr.sp.get(key(l));
+  if (!c) return null;
+  let what;
+  if (sp) what = KIND[sp.k](p, l, w);
+  else { const base = CASE[c] ? c : SLOTCASE[p.st][c]; what = CASE_RU[base]; if (c === HATCHCHAR[p.st]) what += ' · можно заменить шлюзом: '+SLOTS[p.st]; }
+  const stepI = STEPS.findIndex(s => s.st === p.id || (p.grp != null && s.grp === p.grp));
+  return {t:p.title, what, rows:[['Слой от фасада', (l[2]+1)+' из '+gr.D], ['Локально (x, y↑, z)', l.join(', ')], ['Размер', gr.W+'×'+gr.H+'×'+gr.D]], step:stepI};
+}
+const selBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.06, 1.06, 1.06)), new THREE.LineBasicMaterial({color:0xffe14f}));
+selBox.visible = false; scene.add(selBox);
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(); let downXY = null;
+renderer.domElement.addEventListener('pointerdown', e => { downXY = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => { if (!downXY) return; const moved = Math.hypot(e.clientX-downXY[0], e.clientY-downXY[1]); downXY = null; if (moved < 6) pick(e.clientX, e.clientY); });
+function pick(cx, cy){
+  const r = renderer.domElement.getBoundingClientRect();
+  mouse.set((cx-r.left)/r.width*2-1, -(cy-r.top)/r.height*2+1); ray.setFromCamera(mouse, camera);
+  const objs = []; scene.traverseVisible(o => { if (o.isMesh && o.userData.pick) objs.push(o); });
+  const hit = ray.intersectObjects(objs, false)[0];
+  if (!hit) return hideInfo();
+  let w, info;
+  if (hit.object.userData.pl) { const n = hit.face.normal; w = [Math.floor(hit.point.x - n.x*.01), Math.floor(hit.point.y - n.y*.01), Math.floor(hit.point.z - n.z*.01)]; info = mbInfo(hit.object.userData.pl, w); }
+  else { w = hit.object.userData.w; info = hit.object.userData.info; }
+  if (!info) return hideInfo();
+  showInfo(info, w);
+}
+const near = (p, w) => Math.abs(p[0]-w[0]-.5) <= .6 && Math.abs(p[1]-w[1]-.5) <= .6 && Math.abs(p[2]-w[2]-.5) <= .6;
+function showInfo(info, w){
+  const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  $('infoBody').innerHTML = `<h3>${esc(info.t)}</h3>${info.what ? `<p class="what">${esc(info.what)}</p>` : ''}<dl>${(info.rows||[]).concat([['Мир (x, y, z)', w.join(', ')]]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${info.step >= 0 ? `<button class="go" id="infoGo">Шаг постройки ${info.step} →</button>` : ''}`;
+  $('info').hidden = false;
+  if ($('infoGo')) $('infoGo').onclick = () => setStep(info.step);
+  selBox.position.set(w[0]+.5, w[1]+.5, w[2]+.5); selBox.visible = true;
+  const c = [w[0]+.5, w[1]+.5, w[2]+.5];
+  for (const L of OC_LINKS.concat(AE_LINKS)) { const a = L.a.map(v => v+.5), b = L.b.map(v => v+.5); const on = near(a, w) || near(b, w); L.line.material.opacity = on ? 1 : (L.base || .55) * .4; }
+}
+function hideInfo(){ $('info').hidden = true; selBox.visible = false; for (const L of OC_LINKS.concat(AE_LINKS)) L.line.material.opacity = L.base || .55; }
+$('infoX').onclick = hideInfo;
 
 // ---------- цикл ----------
 function resize(){ const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix(); }

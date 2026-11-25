@@ -14,7 +14,7 @@ for f in sorted(glob.glob(f'{B}/tex/*.png')):
 s = open(f'{B}/template.html').read()
 for k, v in [('__STRUCTS__', structs), ('__SPEC__', spec), ('__CT__', ct), ('__RECIPES__', recipes), ('__TEX__', tex), ('__ANIM__', anim)]:
     s = s.replace(k, json.dumps(v, separators=(',', ':'), ensure_ascii=False))
-out = os.environ.get('OUT', '/home/claude/bec/docs/build.html')
+out = os.environ.get('OUT', os.path.normpath(os.path.join(B, '..', '..', 'docs', 'build.html')))
 os.makedirs(os.path.dirname(out), exist_ok=True)
 open(out, 'w').write(s)
 print(out, len(s) // 1024, 'KB')
