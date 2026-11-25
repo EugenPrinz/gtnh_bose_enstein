@@ -2,7 +2,7 @@
 package.path = "./bec/?.lua;./?.lua;" .. package.path
 
 local T = require("tests.t")
-local files = {"tests.test_recipe", "tests.test_entangler", "tests.test_sim", "tests.test_timing", "tests.test_strategy"}
+local files = {"tests.test_recipe", "tests.test_entangler", "tests.test_sim", "tests.test_timing", "tests.test_strategy", "tests.test_hal"}
 local filter = arg[1]
 local pass, fail = 0, 0
 for _, f in ipairs(files) do

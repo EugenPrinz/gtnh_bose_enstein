@@ -98,6 +98,8 @@ progress += floor(acc / D);  acc %= D
 
 - `getParameters`/`setParameter` — общий доступ к параметрам TecTech (`IParametrized`): узел `minParallel`/`maxParallel`/`speedDivisor`, поле `fieldStrength`, затвор `filter0…18`. Драйвер в исходниках не найден, сигнатура не проверена → программа использует **именованные** методы, общий доступ — только запасной путь после `probe`.
 - Буфер EU у TT-контроллера настоящий: EU перекачивается из хетчей в контроллер, ёмкость = 8 × мин. напряжение хетча × сумма ампер (`maxEUStore`). Поэтому падение `getStoredEU` — ранний признак нехватки питания.
+- **Форматы драйверов** (OC GTNH `DriverBEC*`): конденсат — по имени жидкости `entangled_<id>` (`entangled_neutronium`…); фильтры затвора — таблица «слот → имя жидкости», неизвестное имя → ошибка; `getRecipeSteps` — `{nanite = {name, tier}, start, end, index}`, `index` с 0; `getState` — `idle`, `unpowered`, `assembler-offline`, `nanite-tier-too-low`, `paused-step`, `paused-immediate`, `crafting`, `internal-error`. **Все сеттеры применяются со следующего тика** — проверка чтением только после тика.
+- Адрес компонента принадлежит адаптеру, а не машине (после замены адаптера он другой): в конфиге адресов нет, `probe` узнаёт машины по `getName`, узлы — по `getCoordinates`.
 - `getName` возвращает имя регистрации из `MachineLoader` без префикса — проверено в игре: `multi.bec.storage`, `multi.bec.io-node`, `multi.bec.diode`, `multi.bec.generator`, `multi.bec.assembler`.
 - `getEUMaxStored() = 0` ⇔ структура не собрана или нет энергохетчей (`maxEUStore = 8·minV·A`, при `!mMachine` обнуляется). Проверено на несобранной линии: у всех пяти `0/0`. Значения на запитанной линии ещё не сняты.
 
@@ -145,13 +147,15 @@ Entangler ──┐                                     ┌── Observation Ar
 bec/
   main.lua            точка входа, автозапуск, цикл
   config.lua          привязки, бюджеты EU, стратегии
-  hal/
-    gtbase.lua        общие методы GT (работа, энергия, getName/getCoordinates) — для всех пяти машин
-    node.lua          bec_io_node
-    diode.lua         bec_diode (+ инвариант фиктивного фильтра)
-    storage.lua       bec_storage (+ запрет setWorkAllowed(false))
-    entangler.lua     gt_machine «multi.bec.generator»: прогресс цикла, буфер EU
-    array.lua         gt_machine «multi.bec.assembler»: активен ли, вход EU
+  becctl.lua          ✓ probe [--fix] [--reset], diag
+  install.lua         ✓ установка/обновление с GitHub (Internet Card) в /home/bec
+  hal/                ✓ этап 2 (без ae/shuttle/nanites)
+    gtbase.lua        общие методы GT (работа, энергия, getName/getCoordinates), безопасный call()
+    node.lua          bec_io_node: состояние, шаги (index от 1), тиры, конденсат в типах модели, setParallel
+    diode.lua         bec_diode: маршрут = слот 1 фиктивный + типы рецепта, check() со следующего тика
+    storage.lua       bec_storage: запрет setWorkAllowed(false), напряжённость не ниже объёма
+    machine.lua       gt_machine: энтанглер (multi.bec.generator) и Матрица (multi.bec.assembler)
+    probe.lua         поиск машин по getName, проверки, раскладка узлов по координатам
     ae.lua            чтение паттернов, Input subnet, крафты
     shuttle.lua       redstone ↔ IO Port
     nanites/*.lua     драйверы подачи нанитов (A/B, §6)
@@ -225,6 +229,12 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 | `E-TIER` | узел: `getProvidedTier` < `getRequiredTier` дольше таймаута | ошибка | наниты не доехали; проверить подсеть нанитов |
 | `E-COND` | узел требует конденсат, которого нет в `getStoredCondensate` | предупр. | ждать энтанглер; при таймауте — запас мал |
 | `E-FORM` | машина: `getEUMaxStored()` = 0 | крит. | структура не собрана или нет энергохетча: проверить сканером/отвёрткой, достроить |
+| `E-MISSING` | машины нет в сети OC (probe) | крит. | адаптер к контроллеру, кабель/P2P |
+| `E-DUP` | две машины одного вида или > 16 узлов | крит. | адаптер от другой линии — убрать |
+| `E-COMP` | компонент не отвечает на `getName` | крит. | адаптер/чанк |
+| `W-DUMMY` | нет фиктивного фильтра в слоте 1 | предупр. | `becctl probe --fix` (только между партиями) |
+| `W-FILTERS` | слотов фильтра ≠ типов в модели | предупр. | обновился пак — пересобрать `bec/model/data.lua` |
+| `W-FIELD` | объём Поля > напряжённости | предупр. | поднять напряжённость |
 | `E-NODE-LOST` | компонент пропал из `component.list` | крит. | адаптер/чанк; HALT, состояние на диске |
 
 **3. Сверка после партии.** Сколько копий отправлено (IDENTIFY) против того, что ушло в Output (через адаптер AE), и сколько конденсата потрачено (`getConsumedCondensate`) против расчёта модели. Расхождение > допуска → предупреждение в журнал: это сигнал, что модель (§1.2a/§1.4) разошлась с игрой.
@@ -267,13 +277,14 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 
 ## 8. Этапы
 1. ✓ `model/` + `sim/` + тесты (2026-11-25).
-2. `hal/` + `becctl probe/calibrate` + сухой прогон.
+2. `hal/` + `becctl probe/calibrate` + сухой прогон. ✓ HAL машин, `probe`, `diag`, установщик (2026-11-25); осталось: `ae`, `shuttle`, `nanites`, `calibrate`, прогон в игре.
 3. `line.lua` v1: одна партия, constant-стратегия.
 4. swap-стратегия + опережающая подача.
 5. UI, журнал, Discord-вебхук (опц.).
 6. v2: подача конденсата по ходу крафта.
 
 ## 9. Журнал решений
+- 2026-11-25 — этап 2 (часть): HAL пяти машин и `becctl probe/diag`; адреса не храним — узнаём по `getName`/координатам; HAL проверяется против `sim/` через фейковый component API с методами из дампа игры.
 - 2026-11-25 — этап 1: модель и симулятор на Lua 5.3. Стратегия swap — тир = максимум нужных тиров (никто не блокируется). P ограничено питанием Матрицы (§1.4).
 - 2026-11-25 — OC API снят в игре (§1.6): у всех BEC-машин есть общие методы GT (энергия, работа, `getName`); энтанглер и массив видны как `gt_machine`. Добавлены диагностика (§4a) и инварианты 7–9.
 - 2026-11-25 — AE2 по схеме Armisael5: наниты — вариант A, Input → узлы — беспроводные коннекторы/хабы; схема в docs/build.html (шаги «AE2 · …»).

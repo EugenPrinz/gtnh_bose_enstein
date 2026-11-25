@@ -116,4 +116,10 @@ end
 M.all = data.recipes
 M.condensates = data.condensates
 
+-- Имя жидкости конденсата в игре (CondensateType.registerFluids: "entangled_" + id) и обратно
+local BY_FLUID = {}
+for t, d in pairs(data.condensates) do BY_FLUID["entangled_" .. d.id] = t end
+function M.fluid(t) return "entangled_" .. data.condensates[t].id end
+function M.typeOfFluid(name) return BY_FLUID[name] end
+
 return M

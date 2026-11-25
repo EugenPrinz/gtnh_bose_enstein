@@ -2,6 +2,18 @@
 
 ## Не выпущено
 
+### 2026-11-25 — этап 2: HAL и becctl probe
+- `bec/hal/`: `gtbase` (общие методы GT, безопасный `call`), `node`, `diode` (маршрут: слот 1 — фиктивный фильтр,
+  типы рецепта по имени `entangled_<id>`; `check` после тика), `storage` (запрет выключения, напряжённость не ниже
+  объёма), `machine` (энтанглер/Матрица), `probe` (машины по `getName`, узлы по координатам, E-FORM/E-MISSING/
+  E-DUP/E-NODE-LOST, W-DUMMY/W-FILTERS/W-FIELD, `--fix` только при простое узлов).
+- `bec/becctl.lua`: `probe [--fix] [--reset]` (раскладка в `/etc/bec/layout.cfg`), `diag` (снимок в файл).
+- `bec/install.lua`: установка с GitHub в `/home/bec`.
+- `model/recipe`: имя жидкости конденсата ↔ тип.
+- tests: `oc_methods.lua` (дамп из игры), `fake_oc.lua` (component API поверх `sim/`, сеттеры со следующего тика),
+  `test_hal.lua`. Всего 48 тестов.
+- DESIGN: форматы драйверов, новые коды §4a, §3/§8 статус.
+
 ### 2026-11-25 — этап 1: модель и симулятор (Lua 5.3)
 - `bec/model/`: `data.lua` (генерируется `tools/build3d/luadata.py`), `recipe.lua` (шаги как IntDivisionIterator,
   барьеры тира, `roundUpVoltage` как GTUtility, предел P по питанию Матрицы, таблица NaniteTier),

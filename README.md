@@ -4,8 +4,15 @@
 до 16 узлов телепортации, заказы — автокрафтом из основной ME-сети. Цель — одна программа на всю игру:
 любые рецепты BEC, любые тиры нанитов, новые рецепты из обновлений без правки кода.
 
-**Статус:** этап 1 готов — модель и потиковый симулятор линии на Lua 5.3, сверенные друг с другом тестами.
-Дальше — HAL (`hal/`, `becctl probe`) и запуск в креативе.
+**Статус:** готовы модель и потиковый симулятор (этап 1), HAL машин и `becctl probe/diag` (часть этапа 2).
+Программы управления линией ещё нет.
+
+Установка на сервер OC (нужна Internet Card):
+```
+wget -f https://raw.githubusercontent.com/EugenPrinz/gtnh_bose_enstein/main/bec/install.lua /home/install-bec.lua
+install-bec
+cd /home/bec && becctl probe
+```
 
 Механика сверена с исходниками `GTNewHorizons/GT5-Unofficial`, тег `5.09.54.275` (это GT5U в GTNH 2.9.1):
 `MTEBECGenerator`, `MTEBECStorage`, `MTEBECDiode`, `MTEBECAssembler`, `MTEBECIONode`, `BECStructureDefinitions`,
@@ -17,6 +24,7 @@
 |---|---|
 | [DESIGN.md](DESIGN.md) | Архитектура программы: механика линии, эталонная постройка, AE2-подсети, машина состояний, инварианты, стратегии нанитов и энтанглера |
 | [docs/build.html](docs/build.html) | 3D-схема постройки и модель работы (three.js): мультиблоки 1:1 по `StructureDefinition`, AE2 по схеме Armisael5, проверки, пресеты этапов игры |
+| [bec/becctl.lua](bec/becctl.lua), [bec/hal/](bec/hal/) | `becctl probe` / `diag`, обёртки над компонентами OC |
 | [bec/model/](bec/model/) | Модель: рецепты, точное время сборки, энтанглер, план партии (Lua 5.3, без OC) |
 | [sim/](sim/) | Потиковый симулятор линии 1:1 по исходникам GT5U |
 | [tests/](tests/) | `lua5.3 tests/run.lua` из корня репозитория |
