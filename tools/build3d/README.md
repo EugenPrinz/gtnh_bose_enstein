@@ -9,7 +9,8 @@
    входы/выходы узла) → `specials.json`. Сторона шлюза — открытая грань по лучу до края структуры.
 4. `python3 condensates.py` — `CondensateType.java` → `condensates.json` (единица, длительность, EU/t энтанглера; в 2.9.1 — 19 типов).
 5. `python3 recipes.py` — `BECRecipes.java` + правила `BECMetaMaterialRecipes.java` → `recipes_all.json` (28 рецептов).
-6. `python3 build.py` — встраивает структуры, текстуры (`tex/*.png` + `.mcmeta`) в `template.html`
+6. `python3 luadata.py` — `condensates.json` + `recipes_all.json` → `../../bec/model/data.lua` (данные модели).
+7. `python3 build.py` — встраивает структуры, текстуры (`tex/*.png` + `.mcmeta`) в `template.html`
    → `../../docs/build.html` (путь можно задать через `OUT=`).
 
 Текстуры: `tex/BEC_*`, `OVERLAY_*`, `EM_*` — из `GT5-Unofficial` (`assets/gregtech/textures/blocks/iconsets`, тег 5.09.54.275),
