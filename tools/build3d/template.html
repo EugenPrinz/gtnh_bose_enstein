@@ -451,9 +451,9 @@ function ocLine(a, b, dashed){
   ocGroup.add(line); OC_LINKS.push({a, b, line, base:mat.opacity});
 }
 function buildOCLinks(){
-  const R = [-14,0,-4], P2P = [-26,0,9];
+  const R = [-14,0,-4], P2P = P2P_IN;
   for (const t of [[-28,0,9], [-34,1,6], [-33,1,6], [-32,1,6], [-31,1,6], [-23,1,9], [-16,1,9], [-15,1,9], P2P]) ocLine(R, t, false);
-  for (const a of ADAPTERS) ocLine(P2P, a.w, true);
+  for (const o of P2P_OUT) ocLine(P2P_IN, o.w, true);
 }
 
 // ---------- AE2: подсети по схеме Armisael5 (gtnh-bec-controller) ----------
@@ -494,7 +494,10 @@ const AE_ROLE = {
   'Adapter → me_interface (Input)':'Адаптер OC: содержимое Input-подсети (что пришло в партии).',
   'Wireless Hub':'Беспроводной хаб: к нему привязаны пурпурные коннекторы узлов (делить поровну между 4 хабами).',
   'Wireless Hub (OC P2P к затвору, полю, энтанглеру, Матрице)':'Хаб для коннекторов, через которые идёт OC P2P к адаптерам затвора, поля, энтанглера и Матрицы.',
-  'ME P2P (OpenComputers) — вход':'Вход OC P2P-тоннелей: от стойки сюда один кабель, дальше сигнал OC идёт по сети AE к адаптерам узлов, затвора, поля, энтанглера и Матрицы.',
+  'P2P-туннель OpenComputers — вход':'Деталь (part) на ME-кабеле Input, лицом к кабелю OC от стойки. Shift+ПКМ картой памяти — сохранить частоту; дальше сигнал OC идёт по сети AE к выходам.',
+  'P2P-туннель OpenComputers — выход':'Деталь на коротком ME-кабеле, лицом в адаптер. ПКМ картой памяти с частотой входа. Кабель — к пурпурному коннектору, коннектор — к хабу Input. 1 канал.',
+  'Wireless Connector (OC P2P)':'Пурпурный коннектор: подключает ME-кабель с выходом P2P к Input-подсети через хаб.',
+  'ME-кабель Input':'Кабель Input-подсети к детали P2P-входа.',
   'Adapter → me_controller (наниты)':'Адаптер OC у контроллера подсети нанитов: сколько нанитов каждого тира на складе, заказ фейкового крафта.',
   'Transposer':'Компонент OC transposer: перекладывает ячейку между двумя IO Port, чтобы вынуть наниты из шины.',
   'P2P Dual Interface + Fake Crafting Card':'10 паттернов «нанит → нанит», выход переименован в номер тира. Обычный Blocking, не Smart.',
@@ -512,6 +515,24 @@ function aeBox(w, side, top, front, dir, name){
   const mats = ['px','nx','py','ny','pz','nz'].map(f => mm(f === dir && front ? front : (f === 'py' || f === 'ny') ? (top || side) : side));
   const m = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mats); m.position.set(w[0]+.5, w[1]+.5, w[2]+.5);
   aeGroup.add(m); AE_BLOCKS.push({w, name}); m.userData = {pick:true, w, info:{t:name, what:AE_ROLE[name] || '', rows:[['Подсеть AE2', AE_SUB]].concat(AE_COMP[name] ? [['Компонент OC', AE_COMP[name]]] : [])}}; return m;
+}
+// P2P-туннель — деталь (part) на ME-кабеле: ядро кабеля + пластина на грани face (к адаптеру/кабелю OC),
+// хвост кабеля в сторону tail (к коннектору/подсети)
+const P2P_CELLS = [];
+function aeP2P(w, face, tail, name){
+  const c = V3(w), info = {t:name, what:AE_ROLE[name] || '', rows:[['Подсеть AE2', AE_SUB], ['Что это', 'деталь на ME-кабеле, не блок; 1 канал'], ['Компонент OC', 'нет — прозрачно проводит сеть OC']]};
+  const ud = {pick:true, w, info}, add = m => { m.userData = ud; aeGroup.add(m); return m; };
+  add(new THREE.Mesh(new THREE.BoxGeometry(.38,.38,.38), ocMat('AE_CableMagenta'))).position.copy(c);
+  const ax = face[0] ? 0 : face[1] ? 1 : 2, sz = [.75,.75,.75]; sz[ax] = .125;
+  const fk = ['px','nx','py','ny','pz','nz'], fr = fk[ax*2 + (face[ax] > 0 ? 0 : 1)], bk = fk[ax*2 + (face[ax] > 0 ? 1 : 0)];
+  const mats = fk.map(f => ocMat(f === fr ? 'AE_P2PFront' : f === bk ? 'AE_P2PBack' : 'AE_P2PSide'));
+  const plate = add(new THREE.Mesh(new THREE.BoxGeometry(sz[0], sz[1], sz[2]), mats));
+  plate.position.set(c.x + face[0]*.4375, c.y + face[1]*.4375, c.z + face[2]*.4375);
+  if (tail) {
+    const tx = tail[0] ? 0 : tail[1] ? 1 : 2, ts = [.25,.25,.25]; ts[tx] = .5;
+    add(new THREE.Mesh(new THREE.BoxGeometry(ts[0], ts[1], ts[2]), ocMat('AE_CableMagenta'))).position.set(c.x + tail[0]*.25, c.y + tail[1]*.25, c.z + tail[2]*.25);
+  }
+  AE_BLOCKS.push({w, name}); P2P_CELLS.push(w);
 }
 const DRIVE = w => aeBox(w, 'AE_BlockDriveSide', 'AE_BlockDrive', 'AE_BlockDriveFront', 'pz', 'ME Drive');
 const IOP = w => aeBox(w, 'AE_BlockIOPortSide', 'AE_BlockIOPort', null, null, 'ME IO Port');
@@ -537,7 +558,8 @@ function aePath(pts, flow, col){
   AE_FLOWS.push(f);
 }
 const V3 = w => new THREE.Vector3(w[0]+.5, w[1]+.5, w[2]+.5);
-let AE_POS = {};
+let AE_POS = {}, P2P_IN = [-26,0,9];
+const P2P_OUT = []; window.P2P_OUT = P2P_OUT; // для тестов схемы
 function buildAE(){
   AE_SUB = 'Mainnet (основная сеть)';
   aeBox([-36,0,12], 'AE_BlockControllerPowered', null, null, null, 'ME Controller (основная сеть)'); aeBox([-36,1,12], 'AE_BlockControllerColumnPowered', null, null, null, 'ME Controller (основная сеть)');
@@ -561,7 +583,8 @@ function buildAE(){
   // Input (пурпурная)
   AE_SUB = 'Input (пурпурная)';
   aeBox([-24,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); aeBox([-23,0,9], 'AE_BlockInterface', null, null, null, 'ME Interface'); aeBox([-23,1,9], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → me_interface (Input)');
-  aeBox([-26,0,9], 'OC_GenericTop', 'OC_GenericTop', null, null, 'ME P2P (OpenComputers) — вход');
+  aeP2P([-26,0,9], [0,0,-1], [1,0,0], 'P2P-туннель OpenComputers — вход'); P2P_IN = [-26,0,9];
+  { const w = [-25,0,9], m = new THREE.Mesh(new THREE.BoxGeometry(1,.38,.38), ocMat('AE_CableMagenta')); m.position.copy(V3(w)); m.userData = {pick:true, w, info:{t:'ME-кабель Input', what:AE_ROLE['ME-кабель Input'], rows:[['Подсеть AE2', AE_SUB]]}}; aeGroup.add(m); AE_BLOCKS.push({w, name:'ME-кабель Input'}); }
   DRIVE([-22,0,9]); DRIVE([-21,0,9]);
   const hubs = [[-24,1,9], [-22,1,9], [-21,1,9], [-20,1,9]]; hubs.forEach(h => aeBox(h, HUB.magenta, null, null, null, 'Wireless Hub'));
   aeBox([-20,0,9], HUB.magenta, null, null, null, 'Wireless Hub (OC P2P к затвору, полю, энтанглеру, Матрице)');
@@ -596,6 +619,23 @@ function buildAE(){
     aeBox(iw, WL.magenta, null, null, null, 'Wireless Connector → Input'); aeBox(ow, WL.white, null, null, null, 'Wireless Connector → Mainnet');
     aeLink(hubs[i % 4], iw, 0xd24fd8, 'items'); aeLink(ow, mainC, 0xdddddd, 'output');
   });
+  // выходы OC P2P: деталь на ME-кабеле рядом с адаптером, за ней — пурпурный коннектор к хабу Input
+  P2P_OUT.length = 0;
+  const busy = new Set(AE_BLOCKS.map(b => key(b.w)).concat(ADAPTERS.map(a => key(a.w)), OC_BLOCKS.map(b => key(b.w))));
+  const free = w => w[1] >= 0 && !busy.has(key(w)) && !OCC.has(key(w)) && !pipeKeys.has(key(w));
+  let hubI = 0;
+  for (const a of ADAPTERS) {
+    const toCtrl = neg3(DIRL[a.p.ctrlW.d]), out = DIRL[a.p.ctrlW.d];
+    const dirs = Object.values(DIRL).filter(d => key(d) !== key(toCtrl) && key(d) !== key(out)).concat([out]);
+    const d = dirs.find(d => free(add3(a.w, d)) && free(add3(a.w, [d[0]*2, d[1]*2, d[2]*2])));
+    if (!d) { console.warn('нет места для P2P у', a.p.title); continue; }
+    const c1 = add3(a.w, d), c2 = add3(c1, d);
+    aeP2P(c1, neg3(d), d, 'P2P-туннель OpenComputers — выход');
+    aeBox(c2, WL.magenta, null, null, null, 'Wireless Connector (OC P2P)');
+    busy.add(key(c1)); busy.add(key(c2));
+    aeLink(a.p.node != null ? hubs[(hubI++) % 4] : [-20,0,9], c2, 0xd24fd8, null);
+    P2P_OUT.push({a, w:c1});
+  }
   aePath([V3([-33,0,12]), V3([-33,0,8])], 'order', 0xffffff); aePath([V3([-33,0,8]), V3([-34,0,9])], 'order', 0xffffff);
   // доливка запаса конденсата из основной сети — открытый вопрос DESIGN.md
   aeLink([-35,0,12], e2, 0x777777, null);
@@ -687,7 +727,7 @@ const STEPS = [
   {t:'Узлы 5–8 · сзади', show:['field','gen','diode','pL','asm','pR','g0','g1'], grp:1, st:'n4', note:()=>nodeNote('сзади — зеркально передним.', 1)},
   {t:'Узлы 9–12 · сверху', show:['field','gen','diode','pL','asm','pR','g0','g1','g2'], grp:2, st:'n8', note:()=>nodeNote('сверху: узел лежит, контроллер смотрит вверх, люк LoS — вниз. GT разрешает любые повороты, кроме вертикального переворота.', 2)},
   {t:'Узлы 13–16 · снизу', show:['field','gen','diode','pL','asm','pR','g0','g1','g2','g3'], grp:3, st:'n12', note:()=>nodeNote('снизу: контроллер смотрит в землю, под ним — адаптер OC на земле. Только с нижними узлами Матрицу приходится поднимать на 17 блоков; до 12 узлов она стоит на земле.', 3)},
-  {t:'OpenComputers', show:'all', cam:()=>[[-15,1,-3.5], 20, [.45,.4,.8]], note:()=>`<p>Адаптер OC вплотную к контроллеру: ${K} узл., затвор, поле, энтанглер, Матрица (последние два — <code>gt_machine</code>: питание, работа, прогресс для диагностики). Зелёным: <b>сплошные</b> — кабель OC от стойки (Redstone I/O, адаптеры копий паттернов, адаптер Input, адаптер и Transposer нанитов, вход OC P2P); <b>пунктир</b> — ME P2P (OpenComputers) через Input-подсеть к адаптерам у мультиблоков, как у Armisael5.</p><p>Пульт: стойка с Server T4 (CPU T3, Magical Memory, GPU T3, Component Bus Creative, HDD T3, Lua BIOS, Internet Card), экран T3 3×2 (160×50) с клавиатурой, Power Converter (EU из кабеля GT → энергия OC) и Capacitor как буфер. Компонентов ≈ ${K+13}, обычный ПК столько не держит. На экране — живой интерфейс модели.</p><p>Кликни по блоку — карточка покажет, что это и какой компонент OC он даёт.</p>`},
+  {t:'OpenComputers', show:'all', cam:()=>[[-15,1,-3.5], 20, [.45,.4,.8]], note:()=>`<p>Адаптер OC вплотную к контроллеру: ${K} узл., затвор, поле, энтанглер, Матрица (последние два — <code>gt_machine</code>: питание, работа, прогресс для диагностики). Зелёным: <b>сплошные</b> — кабель OC от стойки (Redstone I/O, адаптеры копий паттернов, адаптер Input, адаптер и Transposer нанитов, вход OC P2P); <b>пунктир</b> — P2P-туннели OpenComputers через Input-подсеть. P2P — <b>деталь</b> на ME-кабеле, не блок: вход — на кабеле Input лицом к кабелю OC; у каждой машины выход — на коротком ME-кабеле лицом в адаптер, за ним пурпурный беспроводной коннектор к хабу Input. Каждый туннель — 1 канал. Можно и без P2P — обычным кабелем OC до адаптеров.</p><p>Пульт: стойка с Server T4 (CPU T3, Magical Memory, GPU T3, Component Bus Creative, HDD T3, Lua BIOS, Internet Card), экран T3 3×2 (160×50) с клавиатурой, Power Converter (EU из кабеля GT → энергия OC) и Capacitor как буфер. Компонентов ≈ ${K+13}, обычный ПК столько не держит. На экране — живой интерфейс модели.</p><p>Кликни по блоку — карточка покажет, что это и какой компонент OC он даёт.</p>`},
   {t:'AE2 · основная сеть', show:'all', cam:()=>[[-33,1,10], 30, [.3,.55,.8]], note:()=>`<p>С линией основная сеть связана <b>только в двух местах</b>:</p><ul><li><b>Заказ</b> — Dual Interface с умноженными паттернами BEC (кабелем от основной сети, ключом в Pending). CPU выталкивает предметы и исходные жидкости, сырьё списывается из запасов.</li><li><b>Результат</b> — белый хаб: к нему привязаны коннекторы Output Bus (ME) всех ${K} узл. (${K} каналов из 32). Готовое приходит сюда, CPU закрывает крафт.</li></ul><p>Запасы сырья (расплавы, DSS, предметы, наниты-ингредиенты) лежат в основной сети. Pending, Input, наниты и подсеть энтанглера к ней <b>не подключены</b>.</p><p class="small">Серый пунктир «доливка запаса» — открытый вопрос DESIGN.md: чем программа будет переносить точные порции расплавов в подсеть энтанглера.</p>`},
   {t:'AE2 · Pending и челнок', show:'all', cam:()=>[[-31,1,8], 26, [.35,.55,.75]], note:()=>`<p><b>Mainnet</b>: Dual Interface с <b>умноженными</b> паттернами BEC (вход — исходные жидкости, не запутанные), Blocking Card + Smart Blocking, ключом повернуть в Pending. Рядом — такие же Dual Interface <b>не в сети</b> с <b>немножёнными</b> копиями и адаптерами OC: по ним программа считает число копий.</p><p><b>Pending</b> (чёрная): ME Controller, 2 ME Drive, беспроводной коннектор к энтанглеру, 2 IO Port (3× Superluminal Acceleration Card, «Move to output when cell/network is empty»), 2 корпуса машины с конвейерами UEV и Machine Controller cover, Redstone I/O на красном сплаве. В верхний IO Port — ячейка 16384k (для крафтов Врат — Artificial Universe cell).</p>`},
   {t:'AE2 · Input → узлы', show:'all', cam:()=>[[-10,8,4], 70, [.55,.5,.75]], note:()=>`<p><b>Input</b> (пурпурная): ME Controller, обычный (не Dual) ME Interface + адаптер, 2 ME Drive, 4 беспроводных хаба для узлов + 1 хаб для OC P2P к затвору, полю, энтанглеру, Матрице.</p><p>На каждом узле: пурпурный коннектор → <b>Advanced Stocking Input Bus</b> (включить, refresh 5 тиков), белый коннектор → <b>Output Bus (ME)</b> в Mainnet. Коннекторы узлов делить поровну между 4 хабами.</p><p>Корпус со storage bus на Input (высокий приоритет) и Item Detector cover → Redstone I/O: сигнал «ячейка пуста».</p>`},
@@ -724,7 +764,7 @@ function buildWorld(){
   for (const p of PL) {
     const w = add3(p.ctrlW.w, DIRL[p.ctrlW.d]);
     const a = ocCube(w, 'OC_AdapterSide', 'OC_AdapterTop', 'OC_AdapterSide'); ocGroup.add(a); ADAPTERS.push({p, w});
-    a.userData.info = {t:'Adapter → '+COMP[p.st], what:'Адаптер OC вплотную к контроллеру: '+p.title+'. Связь со стойкой — ME P2P (OpenComputers) через Input-подсеть.',
+    a.userData.info = {t:'Adapter → '+COMP[p.st], what:'Адаптер OC вплотную к контроллеру: '+p.title+'. Связь со стойкой — выход P2P-туннеля OpenComputers (деталь на соседнем ME-кабеле) через Input-подсеть.',
       rows:[['Компонент OC', COMP[p.st]], ['Методы', {bec_io_node:'getState, getRecipeSteps, getRequiredTier, getSlowdowns, set{Min,Max}Parallel + общие GT', bec_diode:'get/setCondensateFilter(s) + общие GT', bec_storage:'get/setFieldStrength, getStoredCondensate + общие GT (setWorkAllowed(false) — никогда!)', gt_machine:'только общие GT: getName = '+(p.st==='BEC_GENERATOR'?'multi.bec.generator':'multi.bec.assembler')}[COMP[p.st]]], ['Общие GT', 'isMachineActive, hasWork, is/setWorkAllowed, getWorkProgress/MaxProgress, getStoredEU, getEUMaxStored, getAverageElectricInput, getName, getCoordinates, getSensorInformation']]};
   }
   buildStation();
