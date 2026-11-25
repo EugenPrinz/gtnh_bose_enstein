@@ -419,7 +419,7 @@ function buildStation(){
   const side = n => ocMat(n);
   // стойка: сервер T4 в верхнем слоте
   const rackInfo = {t:'Стойка OC + Server (Tier 4)', what:'Стойка обязательна: обычный компьютер столько компонентов не держит. Сторону подключения кабеля к серверу задать в GUI стойки.',
-    rows:[['CPU', 'Tier 3'], ['Память', 'Magical Memory'], ['Видеокарта', 'GPU Tier 3 → 160×50 на экране T3'], ['Шина', 'Component Bus (Creative): компонентов ≈ '+(K+11)], ['Диск', 'HDD Tier 3, OpenOS (дисковод — только на установку)'], ['EEPROM', 'Lua BIOS'], ['Сеть', 'Internet Card: автообновление, вебхук'], ['Кабель OC', 'Redstone I/O, адаптеры копий паттернов, Input, наниты, Transposer, вход OC P2P']]};
+    rows:[['CPU', 'Tier 3'], ['Память', 'Magical Memory'], ['Видеокарта', 'GPU Tier 3 → 160×50 на экране T3'], ['Шина', 'Component Bus (Creative): компонентов ≈ '+(K+13)], ['Диск', 'HDD Tier 3, OpenOS (дисковод — только на установку)'], ['EEPROM', 'Lua BIOS'], ['Сеть', 'Internet Card: автообновление, вебхук'], ['Кабель OC', 'Redstone I/O, адаптеры копий паттернов, Input, наниты, Transposer, вход OC P2P']]};
   ocBlock([-14,0,-4], ['px','nx','py','ny','pz','nz'].map(f => side(f === 'pz' ? 'OC_ServerFrontOn' : (f === 'py' || f === 'ny') ? 'OC_GenericTop' : 'OC_RackSide')), rackInfo, 'Rack');
   // экран T3 3×2 (цвет T3) и изображение программы
   const T3 = '#7fe9ff', scrInfo = {t:'Экран Tier 3 (3×2)', what:'Многоблочный экран: 3×2 блока T3. С GPU T3 даёт 160×50 — разметка интерфейса программы BEC. Ставится вплотную к стойке.', rows:[['Разрешение', '160×50 (GPU T3)'], ['Интерфейс', 'на русском, тач-кнопки — как в BHC/DRC']]};
@@ -493,8 +493,8 @@ const AE_ROLE = {
   'ME Interface':'Обычный (не Dual) интерфейс Input-подсети: через адаптер программа видит, что пришло в партии.',
   'Adapter → me_interface (Input)':'Адаптер OC: содержимое Input-подсети (что пришло в партии).',
   'Wireless Hub':'Беспроводной хаб: к нему привязаны пурпурные коннекторы узлов (делить поровну между 4 хабами).',
-  'Wireless Hub (OC P2P к затвору и полю)':'Хаб для коннекторов, через которые идёт OC P2P к адаптерам затвора и поля.',
-  'ME P2P (OpenComputers) — вход':'Вход OC P2P-тоннелей: от стойки сюда один кабель, дальше сигнал OC идёт по сети AE к адаптерам узлов, затвора и поля.',
+  'Wireless Hub (OC P2P к затвору, полю, энтанглеру, Матрице)':'Хаб для коннекторов, через которые идёт OC P2P к адаптерам затвора, поля, энтанглера и Матрицы.',
+  'ME P2P (OpenComputers) — вход':'Вход OC P2P-тоннелей: от стойки сюда один кабель, дальше сигнал OC идёт по сети AE к адаптерам узлов, затвора, поля, энтанглера и Матрицы.',
   'Adapter → me_controller (наниты)':'Адаптер OC у контроллера подсети нанитов: сколько нанитов каждого тира на складе, заказ фейкового крафта.',
   'Transposer':'Компонент OC transposer: перекладывает ячейку между двумя IO Port, чтобы вынуть наниты из шины.',
   'P2P Dual Interface + Fake Crafting Card':'10 паттернов «нанит → нанит», выход переименован в номер тира. Обычный Blocking, не Smart.',
@@ -564,7 +564,7 @@ function buildAE(){
   aeBox([-26,0,9], 'OC_GenericTop', 'OC_GenericTop', null, null, 'ME P2P (OpenComputers) — вход');
   DRIVE([-22,0,9]); DRIVE([-21,0,9]);
   const hubs = [[-24,1,9], [-22,1,9], [-21,1,9], [-20,1,9]]; hubs.forEach(h => aeBox(h, HUB.magenta, null, null, null, 'Wireless Hub'));
-  aeBox([-20,0,9], HUB.magenta, null, null, null, 'Wireless Hub (OC P2P к затвору и полю)');
+  aeBox([-20,0,9], HUB.magenta, null, null, null, 'Wireless Hub (OC P2P к затвору, полю, энтанглеру, Матрице)');
   // Наниты (бирюзовая)
   AE_SUB = 'Наниты (бирюзовая)';
   aeBox([-16,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); aeBox([-16,1,9], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → me_controller (наниты)'); IOP([-15,0,9]); aeBox([-15,1,9], 'OC_TransposerSide', 'OC_TransposerTop', null, null, 'Transposer'); IOP([-15,2,9]);
@@ -576,7 +576,10 @@ function buildAE(){
   const gen = PL.find(p => p.id === 'gen'), gi = SPEC.BEC_GENERATOR.find(e => e.k === 'inhatch');
   const gD = gen.dirW(DIRL[gi.f]), gW = gen.toW(gi.p), lat = gD[2] ? [1,0,0] : [0,0,1];
   const e1 = add3(gW, gD), e2 = add3(e1, gD);
-  aeBox(e1, 'FC_fluid_storage_bus', null, null, null, 'Fluid Storage Bus (Insert Only)'); DRIVE(add3(e1, lat)); DRIVE(add3(e1, neg3(lat)));
+  aeBox(e1, 'FC_fluid_storage_bus', null, null, null, 'Fluid Storage Bus (Insert Only)');
+  // диски — на сторону, дальнюю от адаптера контроллера, и сверху
+  const gAd = key(add3(gen.ctrlW.w, DIRL[gen.ctrlW.d])), gSide = key(add3(e1, lat)) === gAd ? neg3(lat) : lat;
+  DRIVE(add3(e1, gSide)); DRIVE(add3(e1, [0,1,0]));
   aeBox(e2, WL.black, null, null, null, 'Wireless Connector ← Pending');
   aeLink([-31,0,9], e2, 0x9aa0aa, 'fluids');
   // storage bus на шине нанитов Матрицы
@@ -684,10 +687,10 @@ const STEPS = [
   {t:'Узлы 5–8 · сзади', show:['field','gen','diode','pL','asm','pR','g0','g1'], grp:1, st:'n4', note:()=>nodeNote('сзади — зеркально передним.', 1)},
   {t:'Узлы 9–12 · сверху', show:['field','gen','diode','pL','asm','pR','g0','g1','g2'], grp:2, st:'n8', note:()=>nodeNote('сверху: узел лежит, контроллер смотрит вверх, люк LoS — вниз. GT разрешает любые повороты, кроме вертикального переворота.', 2)},
   {t:'Узлы 13–16 · снизу', show:['field','gen','diode','pL','asm','pR','g0','g1','g2','g3'], grp:3, st:'n12', note:()=>nodeNote('снизу: контроллер смотрит в землю, под ним — адаптер OC на земле. Только с нижними узлами Матрицу приходится поднимать на 17 блоков; до 12 узлов она стоит на земле.', 3)},
-  {t:'OpenComputers', show:'all', cam:()=>[[-15,1,-3.5], 20, [.45,.4,.8]], note:()=>`<p>Адаптер OC вплотную к контроллеру: ${K} узл., затвор, поле. Зелёным: <b>сплошные</b> — кабель OC от стойки (Redstone I/O, адаптеры копий паттернов, адаптер Input, адаптер и Transposer нанитов, вход OC P2P); <b>пунктир</b> — ME P2P (OpenComputers) через Input-подсеть к адаптерам у мультиблоков, как у Armisael5.</p><p>Пульт: стойка с Server T4 (CPU T3, Magical Memory, GPU T3, Component Bus Creative, HDD T3, Lua BIOS, Internet Card), экран T3 3×2 (160×50) с клавиатурой, Power Converter (EU из кабеля GT → энергия OC) и Capacitor как буфер. Компонентов ≈ ${K+11}, обычный ПК столько не держит. На экране — живой интерфейс модели.</p><p>Кликни по блоку — карточка покажет, что это и какой компонент OC он даёт.</p>`},
+  {t:'OpenComputers', show:'all', cam:()=>[[-15,1,-3.5], 20, [.45,.4,.8]], note:()=>`<p>Адаптер OC вплотную к контроллеру: ${K} узл., затвор, поле, энтанглер, Матрица (последние два — <code>gt_machine</code>: питание, работа, прогресс для диагностики). Зелёным: <b>сплошные</b> — кабель OC от стойки (Redstone I/O, адаптеры копий паттернов, адаптер Input, адаптер и Transposer нанитов, вход OC P2P); <b>пунктир</b> — ME P2P (OpenComputers) через Input-подсеть к адаптерам у мультиблоков, как у Armisael5.</p><p>Пульт: стойка с Server T4 (CPU T3, Magical Memory, GPU T3, Component Bus Creative, HDD T3, Lua BIOS, Internet Card), экран T3 3×2 (160×50) с клавиатурой, Power Converter (EU из кабеля GT → энергия OC) и Capacitor как буфер. Компонентов ≈ ${K+13}, обычный ПК столько не держит. На экране — живой интерфейс модели.</p><p>Кликни по блоку — карточка покажет, что это и какой компонент OC он даёт.</p>`},
   {t:'AE2 · основная сеть', show:'all', cam:()=>[[-33,1,10], 30, [.3,.55,.8]], note:()=>`<p>С линией основная сеть связана <b>только в двух местах</b>:</p><ul><li><b>Заказ</b> — Dual Interface с умноженными паттернами BEC (кабелем от основной сети, ключом в Pending). CPU выталкивает предметы и исходные жидкости, сырьё списывается из запасов.</li><li><b>Результат</b> — белый хаб: к нему привязаны коннекторы Output Bus (ME) всех ${K} узл. (${K} каналов из 32). Готовое приходит сюда, CPU закрывает крафт.</li></ul><p>Запасы сырья (расплавы, DSS, предметы, наниты-ингредиенты) лежат в основной сети. Pending, Input, наниты и подсеть энтанглера к ней <b>не подключены</b>.</p><p class="small">Серый пунктир «доливка запаса» — открытый вопрос DESIGN.md: чем программа будет переносить точные порции расплавов в подсеть энтанглера.</p>`},
   {t:'AE2 · Pending и челнок', show:'all', cam:()=>[[-31,1,8], 26, [.35,.55,.75]], note:()=>`<p><b>Mainnet</b>: Dual Interface с <b>умноженными</b> паттернами BEC (вход — исходные жидкости, не запутанные), Blocking Card + Smart Blocking, ключом повернуть в Pending. Рядом — такие же Dual Interface <b>не в сети</b> с <b>немножёнными</b> копиями и адаптерами OC: по ним программа считает число копий.</p><p><b>Pending</b> (чёрная): ME Controller, 2 ME Drive, беспроводной коннектор к энтанглеру, 2 IO Port (3× Superluminal Acceleration Card, «Move to output when cell/network is empty»), 2 корпуса машины с конвейерами UEV и Machine Controller cover, Redstone I/O на красном сплаве. В верхний IO Port — ячейка 16384k (для крафтов Врат — Artificial Universe cell).</p>`},
-  {t:'AE2 · Input → узлы', show:'all', cam:()=>[[-10,8,4], 70, [.55,.5,.75]], note:()=>`<p><b>Input</b> (пурпурная): ME Controller, обычный (не Dual) ME Interface + адаптер, 2 ME Drive, 4 беспроводных хаба для узлов + 1 хаб для OC P2P к затвору и полю.</p><p>На каждом узле: пурпурный коннектор → <b>Advanced Stocking Input Bus</b> (включить, refresh 5 тиков), белый коннектор → <b>Output Bus (ME)</b> в Mainnet. Коннекторы узлов делить поровну между 4 хабами.</p><p>Корпус со storage bus на Input (высокий приоритет) и Item Detector cover → Redstone I/O: сигнал «ячейка пуста».</p>`},
+  {t:'AE2 · Input → узлы', show:'all', cam:()=>[[-10,8,4], 70, [.55,.5,.75]], note:()=>`<p><b>Input</b> (пурпурная): ME Controller, обычный (не Dual) ME Interface + адаптер, 2 ME Drive, 4 беспроводных хаба для узлов + 1 хаб для OC P2P к затвору, полю, энтанглеру, Матрице.</p><p>На каждом узле: пурпурный коннектор → <b>Advanced Stocking Input Bus</b> (включить, refresh 5 тиков), белый коннектор → <b>Output Bus (ME)</b> в Mainnet. Коннекторы узлов делить поровну между 4 хабами.</p><p>Корпус со storage bus на Input (высокий приоритет) и Item Detector cover → Redstone I/O: сигнал «ячейка пуста».</p>`},
   {t:'AE2 · подсеть энтанглера', show:'all', cam:()=>[add3(AE_POS.ent,[0,-1,0]), 28, [.6,.5,.7]], note:()=>`<p>На энтанглере — Advanced Stocking Input Hatch. Отдельная маленькая подсеть: 2 ME Drive (жидкостные ячейки) + Fluid Storage Bus <b>Insert Only</b>, к ней — беспроводной коннектор от Pending: жидкости из паттерна сразу уходят сюда.</p><p>Основная сеть сюда <b>не подключается</b>: энтанглер запутает всё, что видит. Запас (passive) — класть в эту подсеть порциями (DESIGN.md §1.2a).</p>`},
   {t:'AE2 · наниты', show:'all', cam:()=>[[-14,1,9], 26, [.45,.55,.75]], note:()=>`<p><b>Наниты</b> (бирюзовая, свой цвет кабеля!): Neutronium ME Controller + адаптер, 2 IO Port с Transposer между ними, ME Drive с ячейкой: фильтр на 10 нанитов BEC, Equal Distribution Card, Types = 10, объём = 307 200 × число Матриц. Crafting Storage + Co-Processor, Energy Anchor.</p><p>P2P <b>Dual</b> Interface (обычный Blocking, не Smart) + Fake Crafting Card, 10 паттернов «нанит → нанит», выход переименован в номер тира («1»…«10»), размер паттерна = нанитов этого тира / число Матриц (30 720 для одной).</p><p>Беспроводной коннектор → <b>двусторонний storage bus на Nanite Containment Bus</b> Матрицы; сверху — storage bus Extract Only к IO Port.</p>`},
 ];
@@ -717,12 +720,12 @@ function buildWorld(){
   buildBeams();
   for (const p of PL) activePlane(p);
   // адаптеры перед контроллерами
-  const COMP = {BEC_IO_NODE:'bec_io_node', BEC_DIODE:'bec_diode', BEC_CONTAINMENT_FIELD:'bec_storage'};
-  for (const p of PL.filter(p => p.id !== 'asm' && p.id !== 'gen')) {
+  const COMP = {BEC_IO_NODE:'bec_io_node', BEC_DIODE:'bec_diode', BEC_CONTAINMENT_FIELD:'bec_storage', BEC_GENERATOR:'gt_machine', BEC_ASSEMBLER:'gt_machine'};
+  for (const p of PL) {
     const w = add3(p.ctrlW.w, DIRL[p.ctrlW.d]);
     const a = ocCube(w, 'OC_AdapterSide', 'OC_AdapterTop', 'OC_AdapterSide'); ocGroup.add(a); ADAPTERS.push({p, w});
     a.userData.info = {t:'Adapter → '+COMP[p.st], what:'Адаптер OC вплотную к контроллеру: '+p.title+'. Связь со стойкой — ME P2P (OpenComputers) через Input-подсеть.',
-      rows:[['Компонент OC', COMP[p.st]], ['Методы', {bec_io_node:'getState, getRecipeSteps, getRequiredTier, set{Min,Max}Parallel, setWorkAllowed…', bec_diode:'get/setCondensateFilter(s), setWorkAllowed', bec_storage:'get/setFieldStrength, getStoredCondensate'}[COMP[p.st]]]]};
+      rows:[['Компонент OC', COMP[p.st]], ['Методы', {bec_io_node:'getState, getRecipeSteps, getRequiredTier, getSlowdowns, set{Min,Max}Parallel + общие GT', bec_diode:'get/setCondensateFilter(s) + общие GT', bec_storage:'get/setFieldStrength, getStoredCondensate + общие GT (setWorkAllowed(false) — никогда!)', gt_machine:'только общие GT: getName = '+(p.st==='BEC_GENERATOR'?'multi.bec.generator':'multi.bec.assembler')}[COMP[p.st]]], ['Общие GT', 'isMachineActive, hasWork, is/setWorkAllowed, getWorkProgress/MaxProgress, getStoredEU, getEUMaxStored, getAverageElectricInput, getName, getCoordinates, getSensorInformation']]};
   }
   buildStation();
   OC_LINKS.length = 0;
@@ -845,10 +848,10 @@ function checks(){
   out.push([!flip, 'Нет вертикального переворота (запрещён в GT)']);
   // 5. адаптеры
   let ad = 0; for (const a of ADAPTERS) if (!OCC.has(key(a.w))) ad++;
-  out.push([ad === ADAPTERS.length, `Адаптеры OC у контроллеров: ${ad}/${ADAPTERS.length} (${K} узл., затвор, поле)`]);
-  let aeColl = 0; const used = new Set(ADAPTERS.map(a => key(a.w)));
-  for (const b of AE_BLOCKS.concat(OC_BLOCKS)) { const k = key(b.w); if (OCC.has(k) || pipeKeys.has(k) || used.has(k)) aeColl++; used.add(k); }
-  out.push([aeColl === 0, aeColl ? `Блоки AE2 пересекаются: ${aeColl}` : `Блоки AE2 (${AE_BLOCKS.length}) и пульт OC (${OC_BLOCKS.length}) не пересекаются с линией, кондуитами и адаптерами`]);
+  out.push([ad === ADAPTERS.length, `Адаптеры OC у контроллеров: ${ad}/${ADAPTERS.length} (${K} узл., затвор, поле, энтанглер, Матрица)`]);
+  let aeColl = 0; const aeBad = []; const used = new Map(ADAPTERS.map(a => [key(a.w), 'адаптер '+a.p.title]));
+  for (const b of AE_BLOCKS.concat(OC_BLOCKS)) { const k = key(b.w); if (OCC.has(k) || pipeKeys.has(k) || used.has(k)) { aeColl++; aeBad.push(`${b.name || '?'} [${k}]${used.has(k) ? ' × '+used.get(k) : ''}`); } used.set(k, b.name || '?'); }
+  out.push([aeColl === 0, aeColl ? `Блоки AE2 пересекаются: ${aeColl} — ${aeBad.join('; ')}` : `Блоки AE2 (${AE_BLOCKS.length}) и пульт OC (${OC_BLOCKS.length}) не пересекаются с линией, кондуитами и адаптерами`]);
   $('checks').innerHTML = out.map(([ok, t]) => `<li><span class="${ok?'y':'n'}">${ok?'✓':'✗'}</span><span>${t}</span></li>`).join('');
 }
 
@@ -1097,7 +1100,7 @@ function updPanel(){
 
 // ---------- клик по блоку ----------
 const KIND = {
-  ctrl:p => ({BEC_IO_NODE:'Контроллер узла телепортации · OC: bec_io_node', BEC_DIODE:'Контроллер Затвора Максвелла · OC: bec_diode', BEC_CONTAINMENT_FIELD:'Контроллер Поля удержания · OC: bec_storage', BEC_ASSEMBLER:'Контроллер Матрицы наблюдения · OC-методов нет', BEC_GENERATOR:'Контроллер энтанглера · OC-методов нет'}[p.st]),
+  ctrl:p => ({BEC_IO_NODE:'Контроллер узла телепортации · OC: bec_io_node', BEC_DIODE:'Контроллер Затвора Максвелла · OC: bec_diode', BEC_CONTAINMENT_FIELD:'Контроллер Поля удержания · OC: bec_storage', BEC_ASSEMBLER:'Контроллер Матрицы наблюдения · OC: gt_machine (общие методы GT)', BEC_GENERATOR:'Контроллер энтанглера · OC: gt_machine (общие методы GT)'}[p.st]),
   bec:p => p.st === 'BEC_DIODE' ? 'Шлюз конденсата — выход (правый), синяя сеть' : 'Шлюз конденсата — '+(p.net === 'L' ? 'левая (оранжевая)' : 'правая (синяя)')+' сеть. Красить в цвет кондуита',
   becin:() => 'Шлюз конденсата — вход (левый), оранжевая сеть',
   los:(p, l, w) => p.node != null ? 'Люк прямой видимости → Матрица, '+G+' блоков. Повернуть ключом к люку Матрицы' : 'Люк прямой видимости → '+((LOS_OF[key(w)] || {}).title || 'узла нет'),

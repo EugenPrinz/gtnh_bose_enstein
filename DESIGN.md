@@ -48,7 +48,7 @@
 - Наниты: суммарно ≤ 30 720 (`MAX_NANITES = 2048·15`), действующий тир = **минимальный** среди поданных. Наниты **не расходуются**.
 - Каждый IO Node читает **полное** `availableNanites` своего массива: 16 узлов работают одновременно, каждому доступны все N нанитов, делить их не нужно.
 - Энергия: узлы питаются по очереди, пока хватает входной EU массива. Узлу без питания — пауза без потери рецепта. Критическая остановка массива → потеря рецептов на всех запитанных узлах.
-- У массива **нет OC-методов** → бюджет энергии задаётся в конфиге.
+- Своих BEC-методов у массива нет, только общие методы GT (`gt_machine`, §1.6): видно, работает ли он (`isMachineActive`), буфер EU и средний вход. Бюджет энергии всё равно задаётся в конфиге, а по `getAverageElectricInput` он сверяется с реальным входом.
 
 ### 1.4 IO Node — прогресс (без изменений между master и 2.9.1)
 ```
@@ -68,6 +68,33 @@ progress += floor(acc / D);  acc %= D
 - Режим `PAUSE` (`PAUSE_INSTANT` / `PAUSE_STEP`) или `PARALLEL`.
 - В режиме `PARALLEL` при ненулевом сигнале **перекрывает `setMaxParallel` из OC** (сила редстоуна × 16^схема). → **Не использовать.**
 - Один хатч в `PAUSE_INSTANT` подключаем к Redstone I/O как аварийный стоп.
+
+### 1.6 OC API — проверено в игре (2.9.1, дамп `component.methods`, 2026-11-25)
+Все пять машин — `TTMultiblockBase`. OC склеивает методы всех подходящих драйверов в один компонент.
+
+**Общие у всех пяти (драйвер GT-машины):**
+
+| Группа | Методы | Для чего программе |
+|---|---|---|
+| работа | `isWorkAllowed`, `setWorkAllowed`, `isMachineActive`, `hasWork`, `getWorkProgress`, `getWorkMaxProgress` | включение/выключение, «машина реально работает», прогресс цикла энтанглера |
+| энергия | `getStoredEU`/`getEUStored`, `getEUMaxStored`/`getEUCapacity`, `getAverageElectricInput`/`getEUInputAverage`, `getInputVoltage` (+ `*String`, Output-методы) | буфер контроллера и средний вход EU/t |
+| опознание | `getName`, `getCoordinates`, `getOwnerName` | какой `gt_machine` энтанглер, а какой массив; привязка узла к месту в схеме |
+| дамп | `getSensorInformation` | то же, что сканер GT; строки с ключами локализации — **только в журнал, не парсить** |
+| мусор | `getSteam*`, `getStoredSteam` | не используются |
+
+**Особые:**
+
+| Компонент | Машина (`getName`, ожид.) | Свои методы |
+|---|---|---|
+| `bec_io_node` | IO Node (`multi.bec.io-node`) | `getState`, `getRecipeSteps`, `getRequiredTier`, `getProvidedTier`, `getAvailableNanites`, `getSlowdowns`, `getRequiredCondensate`, `getConsumedCondensate`, `getParallelRecipesInProgress`, `get/setMinParallel`, `get/setMaxParallel`, `getManualSlowdown`, `setSpeedDivisor`, `getParameters`, `setParameter` |
+| `bec_diode` | Maxwell Gate (`multi.bec.diode`) | `getCondensateFilterCount`, `get/setCondensateFilters`, `get/setCondensateFilterAt`, `getParameters`, `setParameter` |
+| `bec_storage` | Containment Field (`multi.bec.storage`) | `get/setFieldStrength`, `getStoredCondensate`, `getParameters`, `setParameter` |
+| `gt_machine` | Entangler (`multi.bec.generator`) | — |
+| `gt_machine` | Observation Array (`multi.bec.assembler`) | — |
+
+- `getParameters`/`setParameter` — общий доступ к параметрам TecTech (`IParametrized`): узел `minParallel`/`maxParallel`/`speedDivisor`, поле `fieldStrength`, затвор `filter0…18`. Драйвер в исходниках не найден, сигнатура не проверена → программа использует **именованные** методы, общий доступ — только запасной путь после `probe`.
+- Буфер EU у TT-контроллера настоящий: EU перекачивается из хетчей в контроллер, ёмкость = 8 × мин. напряжение хетча × сумма ампер (`maxEUStore`). Поэтому падение `getStoredEU` — ранний признак нехватки питания.
+- Строки `getName` — имена регистрации из `MachineLoader`; что именно возвращает OC (с префиксом или без), проверяет `probe`.
 
 ---
 
@@ -98,7 +125,7 @@ Entangler ──┐                                     ┌── Observation Ar
 - Containment Field: = напряжённость поля (EU/t).
 
 ### 2.3 OC
-- **Стойка + сервер + Component Bus.** Компонентов ~27: 16 узлов + диод + хранилище + ME controller нанитов + transposer + redstone + адаптеры интерфейсов + GPU/экран/клавиатура/fs. Обычный ПК не вытянет.
+- **Стойка + сервер + Component Bus.** Компонентов ~29: 16 узлов + диод + хранилище + энтанглер + массив + ME controller нанитов + transposer + redstone + адаптеры интерфейсов + GPU/экран/клавиатура/fs. Обычный ПК не вытянет.
 - Экран T3, интерфейс на русском (как в BHC/DRC).
 
 ### 2.4 Порядок постройки
@@ -114,9 +141,12 @@ bec/
   main.lua            точка входа, автозапуск, цикл
   config.lua          привязки, бюджеты EU, стратегии
   hal/
+    gtbase.lua        общие методы GT (работа, энергия, getName/getCoordinates) — для всех пяти машин
     node.lua          bec_io_node
     diode.lua         bec_diode (+ инвариант фиктивного фильтра)
-    storage.lua       bec_storage
+    storage.lua       bec_storage (+ запрет setWorkAllowed(false))
+    entangler.lua     gt_machine «multi.bec.generator»: прогресс цикла, буфер EU
+    array.lua         gt_machine «multi.bec.assembler»: активен ли, вход EU
     ae.lua            чтение паттернов, Input subnet, крафты
     shuttle.lua       redstone ↔ IO Port
     nanites/*.lua     драйверы подачи нанитов (A/B, §6)
@@ -129,6 +159,7 @@ bec/
   persist.lua         состояние на диск, resume
   ui.lua              экран
   log.lua             журнал + ротация
+  diag.lua            проверки здоровья, коды ошибок, `becctl diag` (§4a)
 sim/                  симулятор линии по логике MTEBECIONode (тесты оффлайн, Lua 5.3)
 tests/
 docs/BUILD.md         схема постройки по слоям
@@ -164,6 +195,33 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 4. Σ EU/t узлов ≤ бюджета массива.
 5. Containment Field не трогается во время RUN; напряжённость поля меняется только в IDLE и только вверх, либо вниз до значения ≥ текущего объёма.
 6. В режиме `PARALLEL` Controller Hatch не используется.
+7. **Containment Field никогда не получает `setWorkAllowed(false)`.** Без работы поле не начнёт новый цикл, и содержимое сотрётся (`stopMachine` → `clearCondensate`; `add/removeCondensate` при `mMaxProgresstime ≤ 0` тоже чистят).
+8. Перед ROUTE и START затвор работает: `isWorkAllowed() and isMachineActive()`. Если нет — сначала `setWorkAllowed(true)` и ожидание `isMachineActive`, иначе маршрута нет и узлы встанут с `slowdowns`.
+9. Массив `isMachineActive()` до START; иначе узлы не получат питание.
+
+### 4a. Диагностика
+Три уровня, все на методах из §1.6.
+
+**1. `becctl probe` (старт и по команде).** Все компоненты из конфига на месте и нужного типа; `getName` двух `gt_machine` различает энтанглер и массив; `getCoordinates` узлов совпадает с конфигом (узел не перепутан после замены адаптера); `getCondensateFilterCount() = 19` и фиктивный фильтр стоит; поле `getFieldStrength` ≥ объёма хранения. Любое расхождение → HALT с кодом.
+
+**2. Проверка здоровья (каждые 20 тиков, в любой фазе).**
+
+| Код | Условие | Уровень | Что делает программа / что сделать |
+|---|---|---|---|
+| `E-FIELD-PWR` | поле: `getStoredEU` < 25 % `getEUMaxStored` или `isMachineActive` = false | крит. | грозит стирание запаса. Не запускать новые партии; проверить питание поля |
+| `E-FIELD-OFF` | поле: `isWorkAllowed` = false | крит. | кто-то выключил поле → `setWorkAllowed(true)`, запас уже мог стереться — сверить `getStoredCondensate` |
+| `E-GATE-OFF` | затвор не работает в ROUTE/RUN | ошибка | `setWorkAllowed(true)`, ждать `isMachineActive`; если не включился — питание UIV |
+| `E-ARRAY-PWR` | массив неактивен или буфер падает в RUN | ошибка | узлы на паузе (рецепт цел). Проверить питание массива, уменьшить P в конфиге |
+| `E-ENT-STALL` | энтанглер `hasWork`, но `getWorkProgress` не растёт N циклов | предупр. | нет EU или жидкостей; проверить подсеть энтанглера |
+| `E-ENT-IDLE` | запас ниже порога, энтанглер не работает | предупр. | нет жидкостей во входном хетче → проверить доливку |
+| `E-SLOW` | узел: `getSlowdowns()` > 0 | ошибка | загрязнитель в маршруте: стоп подачи, проверка фильтров. > 3 → рецепт потерян |
+| `E-TIER` | узел: `getProvidedTier` < `getRequiredTier` дольше таймаута | ошибка | наниты не доехали; проверить подсеть нанитов |
+| `E-COND` | узел требует конденсат, которого нет в `getStoredCondensate` | предупр. | ждать энтанглер; при таймауте — запас мал |
+| `E-NODE-LOST` | компонент пропал из `component.list` | крит. | адаптер/чанк; HALT, состояние на диске |
+
+**3. Сверка после партии.** Сколько копий отправлено (IDENTIFY) против того, что ушло в Output (через адаптер AE), и сколько конденсата потрачено (`getConsumedCondensate`) против расчёта модели. Расхождение > допуска → предупреждение в журнал: это сигнал, что модель (§1.2a/§1.4) разошлась с игрой.
+
+**`becctl diag`** — снимок всех машин в файл: фаза, все геттеры из §1.6, `getSensorInformation`, последние 50 записей журнала. Его присылают при разборе проблем.
 
 ---
 
@@ -189,7 +247,7 @@ T_swap  = Σ_i  len_i · P / N  +  n_swaps · t_swap          (тир по ша�
 | # | Вопрос | Варианты |
 |---|---|---|
 | N1 | Подача нанитов — **решено: A** | **A** — фейковый AE-крафт «нанит→нанит» с выходом, переименованным в тир, + извлечение ячейкой через IO Port/Transposer (Armisael5, проверено). **B** — Transposer напрямую между ME Interface и Nanite Bus (проще, но нужно проверить ёмкость шины и скорость) |
-| P1 | Бюджет EU массива | только конфиг, читать нельзя. Нужно знать, какое питание подаём |
+| P1 | Бюджет EU массива | задаётся в конфиге; в работе сверяется с `getAverageElectricInput`/`getStoredEU` массива (§1.6). Остаётся проверить, что показывает `getAverageElectricInput` у TT-машины при нескольких хетчах |
 | C1 | Подача конденсата по ходу крафта (v2) | механика позволяет, даст меньше ожидания |
 | U1 | Размер экрана | T3, разметка под 160×50 |
 
@@ -209,6 +267,7 @@ T_swap  = Σ_i  len_i · P / N  +  n_swaps · t_swap          (тир по ша�
 6. v2: подача конденсата по ходу крафта.
 
 ## 9. Журнал решений
+- 2026-11-25 — OC API снят в игре (§1.6): у всех BEC-машин есть общие методы GT (энергия, работа, `getName`); энтанглер и массив видны как `gt_machine`. Добавлены диагностика (§4a) и инварианты 7–9.
 - 2026-11-25 — AE2 по схеме Armisael5: наниты — вариант A, Input → узлы — беспроводные коннекторы/хабы; схема в docs/build.html (шаги «AE2 · …»).
 - 2026-11-24 — подача в энтанглер группами по длительности или все сразу — по расчёту (§1.2a).
 - 2026-11-24 — энтанглер — узкое место (§1.2a): нужен постоянный запас конденсата; 19 типов конденсата в 2.9.1.
