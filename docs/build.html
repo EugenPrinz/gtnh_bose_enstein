@@ -38,6 +38,8 @@ body{background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-se
 .info dt{color:var(--dim)}.info dd{margin:0;font-variant-numeric:tabular-nums}
 .info .x{position:absolute;top:6px;right:6px;min-height:32px;width:32px;padding:0;font-size:18px;line-height:1}
 .info .go{margin-top:8px;min-height:34px}
+.info .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.info .acts button{min-height:34px}
+.unhide{position:absolute;left:16px;bottom:64px;min-height:34px}
 .side{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:14px 16px 28px}
 .sec{margin-bottom:18px}
 .sec h2{font:600 16px/1.2 "Chakra Petch",sans-serif;margin:0 0 8px;color:var(--acc)}
@@ -99,7 +101,8 @@ kbd{font:12px Inter;background:#1d2536;border:1px solid var(--line);border-radiu
   <div class="stage" id="stage">
     <div class="labels" id="labels"></div>
     <div class="hud"><h1>Линия BEC</h1><div class="sub">Постройка и модель работы · GTNH 2.9.1 (GT5U 5.09.54.275) · программа BEC 0.0 (дизайн)</div></div>
-    <div class="legend"><span><i style="background:var(--left)"></i>левая сеть (хранение)</span><span><i style="background:var(--right)"></i>правая сеть (сборка)</span><span><i style="background:var(--acc)"></i>луч LoS</span><span><i style="background:#d24fd8"></i>AE2 Input</span><span><i style="background:#3fd0d0"></i>AE2 наниты</span><span><i style="background:#8cff9a"></i>OC: кабель / P2P</span><span>ЛКМ — вращать, клик — что за блок, ПКМ — сдвиг</span></div>
+    <div class="legend"><span><i style="background:var(--left)"></i>левая сеть (хранение)</span><span><i style="background:var(--right)"></i>правая сеть (сборка)</span><span><i style="background:var(--acc)"></i>луч LoS</span><span><i style="background:#d24fd8"></i>AE2 Input</span><span><i style="background:#3fd0d0"></i>AE2 наниты</span><span><i style="background:#8cff9a"></i>OC: кабель / P2P</span><span>ЛКМ — вращать, клик — что за блок, H — скрыть выбранный, ПКМ — сдвиг</span></div>
+    <button class="unhide" id="unhide" hidden></button>
     <div class="info" id="info" hidden><button class="x" id="infoX" aria-label="Закрыть">×</button><div id="infoBody"></div></div>
     <div class="loading" id="loading">Собираю 22 тысячи блоков…</div>
   </div>
@@ -316,6 +319,8 @@ function meshFrom(bufs, group){
 }
 const OCC = new Map();             // мир: занятые клетки → размещение
 let showSlots = false;
+// скрытые пользователем: клетки мира (блоки мультиблоков и блоки AE2/OC) и мультиблоки целиком
+const HIDDEN = new Set(), HIDDEN_PL = new Set(); let SEL = null;
 function buildPlacement(p, maxZ){
   const gr = GRID[p.st], bufs = {};
   const get = (k, mat) => bufs[k] || (bufs[k] = {p:[], n:[], u:[], mat});
@@ -323,11 +328,12 @@ function buildPlacement(p, maxZ){
     if (maxZ != null && l[2] > maxZ) continue;
     const w = p.toW(l), sp = gr.sp.get(key(l));
     if (maxZ == null) OCC.set(key(w), p);
+    if (HIDDEN.has(key(w))) continue;
     const glass = c === 'H';
     for (const [dn, d] of Object.entries(DIRL)) {
       const nl = [l[0]+d[0], l[1]+d[1], l[2]+d[2]];
       const nc = (maxZ != null && nl[2] > maxZ) ? undefined : gr.m.get(key(nl));
-      if (nc && (nc !== 'H' || glass)) continue;
+      if (nc && (nc !== 'H' || glass) && !(HIDDEN.size && HIDDEN.has(key(p.toW(nl))))) continue;
       const wd = faceDirName(p.dirW(d));
       if (sp && sp.f === dn) {
         const net = sp.k === 'becin' ? 'L' : sp.k === 'bec' ? (p.st === 'BEC_DIODE' ? 'R' : p.net) : null;
@@ -739,7 +745,7 @@ function nodeNote(side, gi){ const n = Math.max(0, Math.min(4, K - gi*4)); if (!
 // ---------- сборка сцены ----------
 const groups = {};
 function addGroup(id, obj){ groups[id] = obj; scene.add(obj); }
-function rebuild(p, maxZ){ if (p.mesh) { scene.remove(p.mesh); p.mesh.traverse(o => o.geometry && o.geometry.dispose()); } p.mesh = buildPlacement(p, maxZ); scene.add(p.mesh); p.mesh.visible = p.visibleFlag !== false; }
+function rebuild(p, maxZ){ if (p.mesh) { scene.remove(p.mesh); p.mesh.traverse(o => o.geometry && o.geometry.dispose()); } p.maxZ = maxZ; p.mesh = buildPlacement(p, maxZ); scene.add(p.mesh); p.mesh.visible = p.visibleFlag !== false && !HIDDEN_PL.has(p.id); }
 
 const labelsEl = $('labels'), LABELS = [];
 function label(text, w, cls, owner){ const el = document.createElement('div'); el.className = 'lbl '+(cls||''); el.textContent = text; labelsEl.appendChild(el); LABELS.push({el, v:new THREE.Vector3(...w), owner}); }
@@ -779,6 +785,7 @@ function buildWorld(){
   label('вход', d.toW([0,6.6,5]), 'L', 'diode');
   label('выход', add3(d.toW([16,6.6,5]), [1,0,0]), 'R', 'diode');
   checks();
+  applyHidden();
 }
 scene.add(pipeGroup.L, pipeGroup.R, ocGroup);
 let ready = false;
@@ -803,6 +810,7 @@ function visibleSet(s){
   const set = new Set(s.show); return set;
 }
 function setStep(i, keepCam){
+  setTimeout(applyHidden, 0);
   step = Math.max(0, Math.min(STEPS.length-1, i));
   const s = STEPS[step], set = visibleSet(s);
   const vis = id => !set || set.has(id);
@@ -1178,20 +1186,52 @@ function pick(cx, cy){
   if (hit.object.userData.pl) { const n = hit.face.normal; w = [Math.floor(hit.point.x - n.x*.01), Math.floor(hit.point.y - n.y*.01), Math.floor(hit.point.z - n.z*.01)]; info = mbInfo(hit.object.userData.pl, w); }
   else { w = hit.object.userData.w; info = hit.object.userData.info; }
   if (!info) return hideInfo();
+  SEL = {w, pl:hit.object.userData.pl || null};
   showInfo(info, w);
 }
 const near = (p, w) => Math.abs(p[0]-w[0]-.5) <= .6 && Math.abs(p[1]-w[1]-.5) <= .6 && Math.abs(p[2]-w[2]-.5) <= .6;
 function showInfo(info, w){
   const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  $('infoBody').innerHTML = `<h3>${esc(info.t)}</h3>${info.what ? `<p class="what">${esc(info.what)}</p>` : ''}<dl>${(info.rows||[]).concat([['Мир (x, y, z)', w.join(', ')]]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${info.step >= 0 ? `<button class="go" id="infoGo">Шаг постройки ${info.step} →</button>` : ''}`;
+  $('infoBody').innerHTML = `<h3>${esc(info.t)}</h3>${info.what ? `<p class="what">${esc(info.what)}</p>` : ''}<dl>${(info.rows||[]).concat([['Мир (x, y, z)', w.join(', ')]]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl><div class="acts">${info.step >= 0 ? `<button class="go" id="infoGo">Шаг постройки ${info.step} →</button>` : ''}${SEL ? `<button id="infoHide">Скрыть блок</button>` : ''}${SEL && SEL.pl ? `<button id="infoHidePl">Скрыть мультиблок</button>` : ''}</div>`;
   $('info').hidden = false;
   if ($('infoGo')) $('infoGo').onclick = () => setStep(info.step);
+  if ($('infoHide')) $('infoHide').onclick = hideSel;
+  if ($('infoHidePl')) $('infoHidePl').onclick = hideSelPl;
   selBox.position.set(w[0]+.5, w[1]+.5, w[2]+.5); selBox.visible = true;
   const c = [w[0]+.5, w[1]+.5, w[2]+.5];
   for (const L of OC_LINKS.concat(AE_LINKS)) { const a = L.a.map(v => v+.5), b = L.b.map(v => v+.5); const on = near(a, w) || near(b, w); L.line.material.opacity = on ? 1 : (L.base || .55) * .4; }
 }
-function hideInfo(){ $('info').hidden = true; selBox.visible = false; for (const L of OC_LINKS.concat(AE_LINKS)) L.line.material.opacity = L.base || .55; }
+function hideInfo(){ $('info').hidden = true; selBox.visible = false; SEL = null; for (const L of OC_LINKS.concat(AE_LINKS)) L.line.material.opacity = L.base || .55; }
 $('infoX').onclick = hideInfo;
+// ---------- скрыть блок ----------
+function applyHidden(){
+  for (const g of [aeGroup, ocGroup]) g.traverse(o => { if (o.isMesh && o.userData.pick && o.userData.w) o.visible = !HIDDEN.has(key(o.userData.w)); });
+  for (const p of PL) if (p.mesh && HIDDEN_PL.has(p.id)) p.mesh.visible = false;
+  const n = HIDDEN.size + HIDDEN_PL.size, b = $('unhide');
+  b.hidden = n === 0; b.textContent = `Показать скрытые (${n})`;
+}
+function hideSel(){
+  if (!SEL) return;
+  HIDDEN.add(key(SEL.w));
+  if (SEL.pl) rebuild(SEL.pl, SEL.pl.maxZ);
+  hideInfo(); applyHidden();
+}
+function hideSelPl(){
+  if (!SEL || !SEL.pl) return;
+  HIDDEN_PL.add(SEL.pl.id);
+  hideInfo(); applyHidden();
+}
+$('unhide').onclick = () => {
+  const had = HIDDEN.size > 0;
+  HIDDEN.clear(); HIDDEN_PL.clear();
+  if (had) for (const p of PL) rebuild(p, p.maxZ);
+  setStep(step, true);
+};
+addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input,select,textarea')) return;
+  if ((e.key === 'h' || e.key === 'H' || e.key === 'р' || e.key === 'Р') && SEL) { e.shiftKey && SEL.pl ? hideSelPl() : hideSel(); }
+  if (e.key === 'Escape') hideInfo();
+});
 
 // ---------- цикл ----------
 function resize(){ const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix(); }
