@@ -84,7 +84,7 @@ progress += floor(acc / D);  acc %= D
 
 **Особые:**
 
-| Компонент | Машина (`getName`, ожид.) | Свои методы |
+| Компонент | Машина (`getName`, проверено) | Свои методы |
 |---|---|---|
 | `bec_io_node` | IO Node (`multi.bec.io-node`) | `getState`, `getRecipeSteps`, `getRequiredTier`, `getProvidedTier`, `getAvailableNanites`, `getSlowdowns`, `getRequiredCondensate`, `getConsumedCondensate`, `getParallelRecipesInProgress`, `get/setMinParallel`, `get/setMaxParallel`, `getManualSlowdown`, `setSpeedDivisor`, `getParameters`, `setParameter` |
 | `bec_diode` | Maxwell Gate (`multi.bec.diode`) | `getCondensateFilterCount`, `get/setCondensateFilters`, `get/setCondensateFilterAt`, `getParameters`, `setParameter` |
@@ -94,7 +94,8 @@ progress += floor(acc / D);  acc %= D
 
 - `getParameters`/`setParameter` — общий доступ к параметрам TecTech (`IParametrized`): узел `minParallel`/`maxParallel`/`speedDivisor`, поле `fieldStrength`, затвор `filter0…18`. Драйвер в исходниках не найден, сигнатура не проверена → программа использует **именованные** методы, общий доступ — только запасной путь после `probe`.
 - Буфер EU у TT-контроллера настоящий: EU перекачивается из хетчей в контроллер, ёмкость = 8 × мин. напряжение хетча × сумма ампер (`maxEUStore`). Поэтому падение `getStoredEU` — ранний признак нехватки питания.
-- Строки `getName` — имена регистрации из `MachineLoader`; что именно возвращает OC (с префиксом или без), проверяет `probe`.
+- `getName` возвращает имя регистрации из `MachineLoader` без префикса — проверено в игре: `multi.bec.storage`, `multi.bec.io-node`, `multi.bec.diode`, `multi.bec.generator`, `multi.bec.assembler`.
+- `getEUMaxStored() = 0` ⇔ структура не собрана или нет энергохетчей (`maxEUStore = 8·minV·A`, при `!mMachine` обнуляется). Проверено на несобранной линии: у всех пяти `0/0`. Значения на запитанной линии ещё не сняты.
 
 ---
 
@@ -202,7 +203,7 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 ### 4a. Диагностика
 Три уровня, все на методах из §1.6.
 
-**1. `becctl probe` (старт и по команде).** Все компоненты из конфига на месте и нужного типа; `getName` двух `gt_machine` различает энтанглер и массив; `getCoordinates` узлов совпадает с конфигом (узел не перепутан после замены адаптера); `getCondensateFilterCount() = 19` и фиктивный фильтр стоит; поле `getFieldStrength` ≥ объёма хранения. Любое расхождение → HALT с кодом.
+**1. `becctl probe` (старт и по команде).** Все компоненты из конфига на месте и нужного типа; у каждой машины `getEUMaxStored() > 0`, иначе `E-FORM`; `getName` двух `gt_machine` различает энтанглер и массив; `getCoordinates` узлов совпадает с конфигом (узел не перепутан после замены адаптера); `getCondensateFilterCount() = 19` и фиктивный фильтр стоит; поле `getFieldStrength` ≥ объёма хранения. Любое расхождение → HALT с кодом.
 
 **2. Проверка здоровья (каждые 20 тиков, в любой фазе).**
 
@@ -217,6 +218,7 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 | `E-SLOW` | узел: `getSlowdowns()` > 0 | ошибка | загрязнитель в маршруте: стоп подачи, проверка фильтров. > 3 → рецепт потерян |
 | `E-TIER` | узел: `getProvidedTier` < `getRequiredTier` дольше таймаута | ошибка | наниты не доехали; проверить подсеть нанитов |
 | `E-COND` | узел требует конденсат, которого нет в `getStoredCondensate` | предупр. | ждать энтанглер; при таймауте — запас мал |
+| `E-FORM` | машина: `getEUMaxStored()` = 0 | крит. | структура не собрана или нет энергохетча: проверить сканером/отвёрткой, достроить |
 | `E-NODE-LOST` | компонент пропал из `component.list` | крит. | адаптер/чанк; HALT, состояние на диске |
 
 **3. Сверка после партии.** Сколько копий отправлено (IDENTIFY) против того, что ушло в Output (через адаптер AE), и сколько конденсата потрачено (`getConsumedCondensate`) против расчёта модели. Расхождение > допуска → предупреждение в журнал: это сигнал, что модель (§1.2a/§1.4) разошлась с игрой.
