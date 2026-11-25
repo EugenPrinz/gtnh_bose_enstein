@@ -384,6 +384,63 @@ function ocCube(w, side, top, front, frontDir){
 }
 const ADAPTERS = [];
 
+// ---------- пульт OC: стойка с сервером, экран T3 3×2, клавиатура, Power Converter + Capacitor ----------
+const OC_BLOCKS = [];
+function tintMat(n, col){ const k = 'tint'+n+col; return matCache[k] || (matCache[k] = new THREE.MeshLambertMaterial({map:mkTex(tinted(IMG[n], col))})); }
+const scrCanvas = document.createElement('canvas'); scrCanvas.width = 384; scrCanvas.height = 256;
+const scrTex = new THREE.CanvasTexture(scrCanvas); scrTex.minFilter = THREE.LinearFilter;
+function drawScreen(){
+  if (!ocGroup.visible) return;
+  const g = scrCanvas.getContext('2d'), W = 384, H = 256;
+  g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+  g.font = '600 22px monospace'; g.fillStyle = '#7fe9ff'; g.fillText('BEC · ' + M.phase, 14, 32);
+  g.font = '15px monospace'; g.fillStyle = '#cfd6e2';
+  const o = M.order;
+  g.fillText(o ? o.r.name.slice(0, 34) : 'ожидание заказа из ME', 14, 58);
+  g.fillText('загрязнители ' + contaminants() + '   готово ' + M.done + ' / потеряно ' + M.lost, 14, 80);
+  for (let i = 0; i < 16; i++) {
+    const n = M.nodes[i], x = 14 + (i % 8)*44, y = 98 + Math.floor(i/8)*40;
+    g.fillStyle = i >= K ? '#11151d' : !n ? '#1c2433' : {run:'#1b6f8a', wait:'#8a6a1b', done:'#1d5a35', lost:'#7a2323'}[n.st];
+    g.fillRect(x, y, 38, 32);
+    if (n && n.st !== 'done' && o) { g.fillStyle = '#4fd8ff'; g.fillRect(x, y+28, 38*Math.min(1, n.prog/o.r.dur), 4); }
+    g.fillStyle = '#e6eaf2'; g.font = '12px monospace'; g.fillText(String(i+1), x+4, y+14);
+  }
+  g.font = '14px monospace'; g.fillStyle = '#9aa6b8';
+  g.fillText('поле ' + fmt(total()) + ' / ' + fmt(M.cap) + ' L', 14, 200);
+  g.fillText('EU/t линии ' + $('vE').textContent, 14, 222);
+  scrTex.needsUpdate = true;
+}
+function ocBlock(w, mats, info, name){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mats); m.position.set(w[0]+.5, w[1]+.5, w[2]+.5);
+  m.userData = {pick:true, w, info}; ocGroup.add(m); OC_BLOCKS.push({w, name}); return m;
+}
+function buildStation(){
+  OC_BLOCKS.length = 0;
+  const side = n => ocMat(n);
+  // стойка: сервер T4 в верхнем слоте
+  const rackInfo = {t:'Стойка OC + Server (Tier 4)', what:'Стойка обязательна: обычный компьютер столько компонентов не держит. Сторону подключения кабеля к серверу задать в GUI стойки.',
+    rows:[['CPU', 'Tier 3'], ['Память', 'Magical Memory'], ['Видеокарта', 'GPU Tier 3 → 160×50 на экране T3'], ['Шина', 'Component Bus (Creative): компонентов ≈ '+(K+11)], ['Диск', 'HDD Tier 3, OpenOS (дисковод — только на установку)'], ['EEPROM', 'Lua BIOS'], ['Сеть', 'Internet Card: автообновление, вебхук'], ['Кабель OC', 'Redstone I/O, адаптеры копий паттернов, Input, наниты, Transposer, вход OC P2P']]};
+  ocBlock([-14,0,-4], ['px','nx','py','ny','pz','nz'].map(f => side(f === 'pz' ? 'OC_ServerFrontOn' : (f === 'py' || f === 'ny') ? 'OC_GenericTop' : 'OC_RackSide')), rackInfo, 'Rack');
+  // экран T3 3×2 (цвет T3) и изображение программы
+  const T3 = '#7fe9ff', scrInfo = {t:'Экран Tier 3 (3×2)', what:'Многоблочный экран: 3×2 блока T3. С GPU T3 даёт 160×50 — разметка интерфейса программы BEC. Ставится вплотную к стойке.', rows:[['Разрешение', '160×50 (GPU T3)'], ['Интерфейс', 'на русском, тач-кнопки — как в BHC/DRC']]};
+  const tiles = [['ftl','ftm','ftr'], ['fbl','fbm','fbr']];
+  for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
+    const front = tintMat('OC_scr_'+tiles[r][c], T3), back = tintMat('OC_scr_b', T3);
+    ocBlock([-17+c, 1-r, -4], ['px','nx','py','ny','pz','nz'].map(f => f === 'pz' ? front : back), scrInfo, 'Screen');
+  }
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 1.72), new THREE.MeshBasicMaterial({map:scrTex}));
+  scr.position.set(-15.5, 1, -2.995); scr.userData = {pick:true, w:[-16,1,-4], info:scrInfo}; ocGroup.add(scr);
+  // клавиатура перед экраном
+  const kb = new THREE.Mesh(new THREE.BoxGeometry(.9, .12, .55), [side('OC_RackSide'), side('OC_RackSide'), side('OC_Keyboard'), side('OC_RackSide'), side('OC_RackSide'), side('OC_RackSide')]);
+  kb.position.set(-15.5, .06, -2.6); kb.userData = {pick:true, w:[-16,0,-3], info:{t:'Клавиатура', what:'Привязана к экрану (вплотную к нему). Ctrl+Alt+C — выход из программы.', rows:[]}}; ocGroup.add(kb);
+  // питание: Power Converter (EU GT → энергия OC) + Capacitor
+  const pcInfo = {t:'Power Converter', what:'Переводит EU из кабеля GT в энергию OC для стойки, экрана и адаптеров (по кабелю OC). Подвести GT-кабель любого тира, от которого есть энергия; ток небольшой.', rows:[['Вход', 'EU (кабель GT)'], ['Выход', 'энергия OC по кабелю/соседству'], ['Рядом', 'Capacitor — буфер на провалы питания']]};
+  ocBlock([-13,0,-4], side('OC_PowerConverterSide'), pcInfo, 'Power Converter');
+  ocBlock([-13,1,-4], ['px','nx','py','ny','pz','nz'].map(f => side(f === 'py' || f === 'ny' ? 'OC_CapacitorTop' : 'OC_CapacitorSide')), {t:'Capacitor', what:'Буфер энергии OC: сервер не выключится от короткого провала EU. Работает вплотную к конвертеру/стойке.', rows:[]}, 'Capacitor');
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(.3, .3, 3), new THREE.MeshLambertMaterial({color:0x6b6f7a}));
+  cab.position.set(-12.5, .5, -1.5); cab.userData = {pick:true, w:[-13,0,-2], info:{t:'Кабель GT (EU)', what:'Питание пульта: EU от твоей энергосети к Power Converter.', rows:[]}}; ocGroup.add(cab);
+}
+
 // ---------- связи OC: кабель от стойки, P2P к адаптерам у мультиблоков ----------
 const OC_LINKS = [];
 function ocLine(a, b, dashed){
@@ -394,7 +451,7 @@ function ocLine(a, b, dashed){
   ocGroup.add(line); OC_LINKS.push({a, b, line, base:mat.opacity});
 }
 function buildOCLinks(){
-  const R = [-14,1,-4], P2P = [-26,0,9];
+  const R = [-14,0,-4], P2P = [-26,0,9];
   for (const t of [[-28,0,9], [-34,1,6], [-33,1,6], [-32,1,6], [-31,1,6], [-23,1,9], [-16,1,9], [-15,1,9], P2P]) ocLine(R, t, false);
   for (const a of ADAPTERS) ocLine(P2P, a.w, true);
 }
@@ -627,7 +684,7 @@ const STEPS = [
   {t:'Узлы 5–8 · сзади', show:['field','gen','diode','pL','asm','pR','g0','g1'], grp:1, st:'n4', note:()=>nodeNote('сзади — зеркально передним.', 1)},
   {t:'Узлы 9–12 · сверху', show:['field','gen','diode','pL','asm','pR','g0','g1','g2'], grp:2, st:'n8', note:()=>nodeNote('сверху: узел лежит, контроллер смотрит вверх, люк LoS — вниз. GT разрешает любые повороты, кроме вертикального переворота.', 2)},
   {t:'Узлы 13–16 · снизу', show:['field','gen','diode','pL','asm','pR','g0','g1','g2','g3'], grp:3, st:'n12', note:()=>nodeNote('снизу: контроллер смотрит в землю, под ним — адаптер OC на земле. Только с нижними узлами Матрицу приходится поднимать на 17 блоков; до 12 узлов она стоит на земле.', 3)},
-  {t:'OpenComputers', show:'all', cam:()=>[[-14,2,-2], 45, [.5,.5,.7]], note:()=>`<p>Адаптер OC вплотную к контроллеру: ${K} узл., затвор, поле. Зелёным: <b>сплошные</b> — кабель OC от стойки (Redstone I/O, адаптеры копий паттернов, адаптер Input, адаптер и Transposer нанитов, вход OC P2P); <b>пунктир</b> — ME P2P (OpenComputers) через Input-подсеть к адаптерам у мультиблоков, как у Armisael5.</p><p>Кликни по блоку — карточка покажет, что это и какой компонент OC он даёт.</p><p>Стойка (сервер T4, Component Bus Creative, Internet Card) у затвора: компонентов ≈ ${K+11}, обычный ПК столько не держит. Redstone I/O управляет челноком ячеек AE2.</p>`},
+  {t:'OpenComputers', show:'all', cam:()=>[[-15,1,-3.5], 20, [.45,.4,.8]], note:()=>`<p>Адаптер OC вплотную к контроллеру: ${K} узл., затвор, поле. Зелёным: <b>сплошные</b> — кабель OC от стойки (Redstone I/O, адаптеры копий паттернов, адаптер Input, адаптер и Transposer нанитов, вход OC P2P); <b>пунктир</b> — ME P2P (OpenComputers) через Input-подсеть к адаптерам у мультиблоков, как у Armisael5.</p><p>Пульт: стойка с Server T4 (CPU T3, Magical Memory, GPU T3, Component Bus Creative, HDD T3, Lua BIOS, Internet Card), экран T3 3×2 (160×50) с клавиатурой, Power Converter (EU из кабеля GT → энергия OC) и Capacitor как буфер. Компонентов ≈ ${K+11}, обычный ПК столько не держит. На экране — живой интерфейс модели.</p><p>Кликни по блоку — карточка покажет, что это и какой компонент OC он даёт.</p>`},
   {t:'AE2 · основная сеть', show:'all', cam:()=>[[-33,1,10], 30, [.3,.55,.8]], note:()=>`<p>С линией основная сеть связана <b>только в двух местах</b>:</p><ul><li><b>Заказ</b> — Dual Interface с умноженными паттернами BEC (кабелем от основной сети, ключом в Pending). CPU выталкивает предметы и исходные жидкости, сырьё списывается из запасов.</li><li><b>Результат</b> — белый хаб: к нему привязаны коннекторы Output Bus (ME) всех ${K} узл. (${K} каналов из 32). Готовое приходит сюда, CPU закрывает крафт.</li></ul><p>Запасы сырья (расплавы, DSS, предметы, наниты-ингредиенты) лежат в основной сети. Pending, Input, наниты и подсеть энтанглера к ней <b>не подключены</b>.</p><p class="small">Серый пунктир «доливка запаса» — открытый вопрос DESIGN.md: чем программа будет переносить точные порции расплавов в подсеть энтанглера.</p>`},
   {t:'AE2 · Pending и челнок', show:'all', cam:()=>[[-31,1,8], 26, [.35,.55,.75]], note:()=>`<p><b>Mainnet</b>: Dual Interface с <b>умноженными</b> паттернами BEC (вход — исходные жидкости, не запутанные), Blocking Card + Smart Blocking, ключом повернуть в Pending. Рядом — такие же Dual Interface <b>не в сети</b> с <b>немножёнными</b> копиями и адаптерами OC: по ним программа считает число копий.</p><p><b>Pending</b> (чёрная): ME Controller, 2 ME Drive, беспроводной коннектор к энтанглеру, 2 IO Port (3× Superluminal Acceleration Card, «Move to output when cell/network is empty»), 2 корпуса машины с конвейерами UEV и Machine Controller cover, Redstone I/O на красном сплаве. В верхний IO Port — ячейка 16384k (для крафтов Врат — Artificial Universe cell).</p>`},
   {t:'AE2 · Input → узлы', show:'all', cam:()=>[[-10,8,4], 70, [.55,.5,.75]], note:()=>`<p><b>Input</b> (пурпурная): ME Controller, обычный (не Dual) ME Interface + адаптер, 2 ME Drive, 4 беспроводных хаба для узлов + 1 хаб для OC P2P к затвору и полю.</p><p>На каждом узле: пурпурный коннектор → <b>Advanced Stocking Input Bus</b> (включить, refresh 5 тиков), белый коннектор → <b>Output Bus (ME)</b> в Mainnet. Коннекторы узлов делить поровну между 4 хабами.</p><p>Корпус со storage bus на Input (высокий приоритет) и Item Detector cover → Redstone I/O: сигнал «ячейка пуста».</p>`},
@@ -667,16 +724,13 @@ function buildWorld(){
     a.userData.info = {t:'Adapter → '+COMP[p.st], what:'Адаптер OC вплотную к контроллеру: '+p.title+'. Связь со стойкой — ME P2P (OpenComputers) через Input-подсеть.',
       rows:[['Компонент OC', COMP[p.st]], ['Методы', {bec_io_node:'getState, getRecipeSteps, getRequiredTier, set{Min,Max}Parallel, setWorkAllowed…', bec_diode:'get/setCondensateFilter(s), setWorkAllowed', bec_storage:'get/setFieldStrength, getStoredCondensate'}[COMP[p.st]]]]};
   }
-  const rack = ocCube([-14,0,-4], 'OC_RackSide', 'OC_GenericTop', 'OC_RackFront', 'pz'), srv = ocCube([-14,1,-4], 'OC_RackSide', 'OC_GenericTop', 'OC_ServerFrontOn', 'pz');
-  const rackInfo = {t:'Стойка OC с сервером', what:'Сервер T4: CPU T3, GPU T3, Magical Memory, Component Bus (Creative), HDD T3, Internet Card. Экран T3 и клавиатура рядом.', rows:[['Компонентов', '≈ '+(K+11)], ['Кабелем', 'Redstone I/O, 4 адаптера копий паттернов, адаптер Input, адаптер и Transposer нанитов, вход OC P2P'], ['Через P2P', 'адаптеры '+K+' узл., затвора и поля']]};
-  rack.userData.info = srv.userData.info = rackInfo;
-  ocGroup.add(rack, srv);
+  buildStation();
   OC_LINKS.length = 0;
   initFlows();
   buildAE();
   buildOCLinks();
   for (const p of PL) { const c = centerOf(p); label(p.title, [c[0], c[1]+1.5, c[2]], p.net || '', p.id); }
-  label('Стойка OC', [-13.5, 2.6, -3.5], '', 'oc');
+  label('Стойка OC', [-13.5, 1.6, -3.5], '', 'oc'); label('Экран T3', [-15.5, 2.6, -3.5], '', 'oc'); label('Power Converter', [-12.5, 2.6, -3.5], '', 'oc');
   label('OC P2P', [-25.5, 1.6, 9.5], '', 'ae');
   const d = PL.find(p => p.id === 'diode');
   label('вход', d.toW([0,6.6,5]), 'L', 'diode');
@@ -793,8 +847,8 @@ function checks(){
   let ad = 0; for (const a of ADAPTERS) if (!OCC.has(key(a.w))) ad++;
   out.push([ad === ADAPTERS.length, `Адаптеры OC у контроллеров: ${ad}/${ADAPTERS.length} (${K} узл., затвор, поле)`]);
   let aeColl = 0; const used = new Set(ADAPTERS.map(a => key(a.w)));
-  for (const b of AE_BLOCKS) { const k = key(b.w); if (OCC.has(k) || pipeKeys.has(k) || used.has(k)) aeColl++; used.add(k); }
-  out.push([aeColl === 0, aeColl ? `Блоки AE2 пересекаются: ${aeColl}` : `Блоки AE2 (${AE_BLOCKS.length}) не пересекаются с линией, кондуитами и адаптерами`]);
+  for (const b of AE_BLOCKS.concat(OC_BLOCKS)) { const k = key(b.w); if (OCC.has(k) || pipeKeys.has(k) || used.has(k)) aeColl++; used.add(k); }
+  out.push([aeColl === 0, aeColl ? `Блоки AE2 пересекаются: ${aeColl}` : `Блоки AE2 (${AE_BLOCKS.length}) и пульт OC (${OC_BLOCKS.length}) не пересекаются с линией, кондуитами и адаптерами`]);
   $('checks').innerHTML = out.map(([ok, t]) => `<li><span class="${ok?'y':'n'}">${ok?'✓':'✗'}</span><span>${t}</span></li>`).join('');
 }
 
@@ -1134,7 +1188,7 @@ function loop(now){
   // подписи
   const w = stage.clientWidth, h = stage.clientHeight, v = new THREE.Vector3();
   for (const L of LABELS) { if (!L.on) continue; v.copy(L.v).project(camera); const vis = v.z < 1; L.el.style.visibility = vis ? 'visible' : 'hidden'; if (vis) { L.el.style.left = ((v.x+1)/2*w)+'px'; L.el.style.top = ((1-v.y)/2*h)+'px'; } }
-  panelT += dt; if (panelT > .12) { panelT = 0; updPanel(); }
+  panelT += dt; if (panelT > .12) { panelT = 0; updPanel(); drawScreen(); }
   requestAnimationFrame(loop);
 }
 applyPreset(4); est();
