@@ -110,8 +110,10 @@ function F:ae(o)
   end})
   local function craftable(t, size, kind)
     -- как в игре (OC GTNH): метод getStack, выход паттерна не переименован
-    return {getStack = function() return {label = kind:gsub("(%l)(%u)", "%1 %2") .. " Nanites", size = size} end,
-      request = function(amount)
+    -- метод значения OC — вызываемая таблица (type ~= "function"), как в игре
+    local function method(f) return setmetatable({}, {__call = function(_, ...) return f(...) end}) end
+    return {getStack = method(function() return {label = kind:gsub("(%l)(%u)", "%1 %2") .. " Nanites", size = size} end),
+      request = method(function(amount)
         local job = {left = 3}
         fake.jobs[#fake.jobs + 1] = function()
           job.left = job.left - 1
@@ -122,8 +124,9 @@ function F:ae(o)
             return true
           end
         end
-        return {isDone = function() return job.left <= 0 end, isCanceled = function() return false end, hasFailed = function() return false end}
-      end}
+        return {isDone = method(function() return job.left <= 0 end), isCanceled = method(function() return false end),
+          hasFailed = method(function() return false end)}
+      end)}
   end
   local recipe = require("model.recipe")
   self:add("me_controller", nil, nil, {getCraftables = function()

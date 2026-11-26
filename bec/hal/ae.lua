@@ -135,9 +135,9 @@ function A:naniteCrafts(t, force)
   local by = {}
   for i = 1, 10 do by[i] = {} end
   for _, cr in ipairs(list) do
-    local st
-    if type(cr.getStack) == "function" then st = G.call(cr, "getStack") end
-    if type(st) ~= "table" and type(cr.getItemStack) == "function" then st = G.call(cr, "getItemStack") end
+    -- методы значений OC — вызываемые объекты, не function: type() не проверять, просто вызывать
+    local st = cr.getStack ~= nil and G.call(cr, "getStack") or nil
+    if type(st) ~= "table" and cr.getItemStack ~= nil then st = G.call(cr, "getItemStack") end
     local tier = type(st) == "table" and A.tierOfLabel(st.label)
     if tier and (st.size or 0) > 0 then by[tier][#by[tier] + 1] = {cr = cr, size = st.size, label = st.label} end
   end
