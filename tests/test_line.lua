@@ -224,4 +224,19 @@ S["копия без жидкостей и чужие предметы — E-BAT
   T.ok(line.st.err.msg:find("нет жидкостей"), line.st.err.msg)
 end
 
+S["паттерн нанитов есть, запаса нет — E-TIER с причиной"] = function()
+  local w, f, d = setup(1)
+  f.naniteStore["Transcendent Nanites"] = 0
+  local line = Line.new(d)
+  line:init()
+  f:batch(SENSOR, 1)
+  local filled = false
+  runUntil(line, f, function()
+    if line.st.phase == "WAIT_COND" and not filled then fill(w, 1); filled = true end
+    return line.st.phase == "FAULT"
+  end, 2000)
+  T.eq(line.st.phase, "FAULT")
+  T.ok(logText(d):find("в подсети 0, паттерн на 64"), logText(d))
+end
+
 return S

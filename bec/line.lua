@@ -265,14 +265,16 @@ function L:supply(T)
     if not ok then return nil, "извлечение: " .. e end
     self.st.provided, self.st.unknownNanites, self.st.N = nil, nil, nil
   end
-  local stock = self.ae:naniteStock()
+  local stock, why = self.ae:naniteStock()
   local load, e = strategy.naniteLoad(T, stock, self.cfg.naniteFill)
   if not load then
-    -- паттерн могли добавить после старта: перечитать craftables и попробовать ещё раз
+    -- паттерн или запас могли появиться после старта: перечитать и попробовать ещё раз
     self.ae.craft = {}
-    stock = self.ae:naniteStock()
+    stock, why = self.ae:naniteStock()
     load, e = strategy.naniteLoad(T, stock, self.cfg.naniteFill)
-    if not load then return nil, e .. " (в подсети нанитов нет паттерна с выходом «" .. T .. "»)" end
+    if not load then
+      return nil, e .. (why[T] and (" (" .. why[T] .. ")") or " (в подсети нанитов нет паттерна для этого тира)")
+    end
   end
   local jobs = {}
   for _, o in ipairs(load.order) do

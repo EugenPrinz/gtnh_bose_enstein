@@ -132,6 +132,12 @@ function A:naniteCrafts(t, force)
   if not p then return nil, "нет me_controller подсети нанитов" end
   local list, err = G.call(p, "getCraftables")
   if type(list) ~= "table" then return nil, tostring(err) end
+  -- запас в подсети: паттерн «нанит → нанит» берёт вход со склада, без запаса крафт = missing resources
+  local stored = {}
+  local items = G.call(p, "getItemsInNetwork")
+  if type(items) == "table" then
+    for _, it in ipairs(items) do if it.label then stored[it.label] = (stored[it.label] or 0) + (it.size or 0) end end
+  end
   local by = {}
   for i = 1, 10 do by[i] = {} end
   for _, cr in ipairs(list) do
@@ -139,7 +145,9 @@ function A:naniteCrafts(t, force)
     local st = cr.getStack ~= nil and G.call(cr, "getStack") or nil
     if type(st) ~= "table" and cr.getItemStack ~= nil then st = G.call(cr, "getItemStack") end
     local tier = type(st) == "table" and A.tierOfLabel(st.label)
-    if tier and (st.size or 0) > 0 then by[tier][#by[tier] + 1] = {cr = cr, size = st.size, label = st.label} end
+    if tier and (st.size or 0) > 0 then
+      by[tier][#by[tier] + 1] = {cr = cr, size = st.size, label = st.label, stored = stored[st.label] or 0}
+    end
   end
   for i = 1, 10 do self.craft[i] = by[i] end
   return self.craft[t]
@@ -147,12 +155,15 @@ end
 
 -- Сколько нанитов каждого тира можно заказать (= размеры паттернов): {тир → N}
 function A:naniteStock()
-  local s = {}
+  local s, why = {}, {}
   for t = 1, 10 do
     local l = self:naniteCrafts(t) or {}
-    for _, x in ipairs(l) do s[t] = (s[t] or 0) + x.size end
+    for _, x in ipairs(l) do
+      if x.stored >= x.size then s[t] = (s[t] or 0) + x.size
+      else why[t] = string.format("%s: в подсети %d, паттерн на %d", tostring(x.label), x.stored, x.size) end
+    end
   end
-  return s
+  return s, why
 end
 
 -- Заказать count нанитов тира t (по паттернам тира, пока не наберётся). Возвращает список заданий.

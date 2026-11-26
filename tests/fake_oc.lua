@@ -129,7 +129,15 @@ function F:ae(o)
       end)}
   end
   local recipe = require("model.recipe")
-  self:add("me_controller", nil, nil, {getCraftables = function()
+  self.naniteStore = {}
+  for t, size in pairs(o.nanites) do
+    self.naniteStore[recipe.NANITE_FOR_TIER[t]:gsub("(%l)(%u)", "%1 %2") .. " Nanites"] = size
+  end
+  self:add("me_controller", nil, nil, {getItemsInNetwork = function()
+    local l = {}
+    for label, n in pairs(fake.naniteStore) do l[#l + 1] = {label = label, size = n} end
+    return l
+  end, getCraftables = function()
     local l = {}
     for t, size in pairs(o.nanites) do l[#l + 1] = craftable(t, size, recipe.NANITE_FOR_TIER[t]) end
     return l
