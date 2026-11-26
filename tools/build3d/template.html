@@ -42,6 +42,16 @@ body{background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-se
 .info .fill{margin-top:8px;padding-top:6px;border-top:1px solid #2a3350}.info .fill h4{margin:0 0 4px;font:600 13.5px/1.2 "Chakra Petch",sans-serif;color:var(--acc)}
 .info .slots{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:6px;max-width:220px}.info .slots i{height:22px;border:1px solid #3a4466;border-radius:3px;font:600 10px/20px monospace;text-align:center;font-style:normal;color:#9aa}.info .slots i.on{background:#21304d;border-color:var(--acc);color:#e8f6ff}
 .fillt{width:100%;border-collapse:collapse;font-size:12.5px}.fillt th,.fillt td{border-top:1px solid #2a3350;padding:3px 4px;text-align:left;vertical-align:top}.fillt td:first-child{color:var(--dim);white-space:nowrap}
+.mc{--s:30px;background:#c6c6c6;border:2px solid;border-color:#fff #555 #555 #fff;border-radius:3px;padding:6px 8px 8px;color:#3f3f3f;margin-top:8px;display:inline-block;max-width:100%}
+.mc.iface{--s:25px}
+.mct{font:600 12px/1.2 monospace;color:#3f3f3f;margin-bottom:4px}.mcl{font:10.5px/1.2 monospace;color:#555;margin:4px 0 2px}
+.mcg{display:grid}.mcrow{display:flex;gap:8px;align-items:flex-start}.mcdir{align-self:center;font:700 12px monospace;color:#3f3f3f;padding-top:12px;white-space:nowrap}
+.sl{width:var(--s);height:var(--s);background:#8b8b8b;border:2px solid;border-color:#373737 #fff #fff #373737;position:relative;box-sizing:border-box}
+.sl img{position:absolute;inset:1px;width:calc(100% - 2px);height:calc(100% - 2px);image-rendering:pixelated}
+.sl b{position:absolute;right:0;bottom:-1px;font:700 9.5px/1 monospace;color:#fff;text-shadow:1px 1px 0 #3f3f3f}
+.sl.fluid img{filter:hue-rotate(170deg) saturate(1.6)}
+.mcb{display:inline-block;background:#8b8b8b;color:#fff;border:2px solid;border-color:#fff #373737 #373737 #fff;font:10.5px/1.3 monospace;padding:2px 6px;margin:6px 4px 0 0}
+.mcn{margin:4px 0 0;font:10.5px/1.3 monospace;color:#555;max-width:260px}
 .info .small{margin:2px 0 0;font-size:12px;color:var(--dim)}
 .info{max-height:calc(100% - 60px);overflow:auto}
 .tools{position:absolute;left:16px;bottom:64px;display:flex;gap:6px;flex-wrap:wrap}.tools button{min-height:34px}
@@ -527,7 +537,7 @@ function ovlMat(base, ovl){ const k = 'ovl'+base+ovl; return matCache[k] || (mat
 // ---------- что вставить / как настроить (Armisael5/gtnh-bec-controller + DESIGN.md) ----------
 // rows: [что, значение]; slots: ячейки в ЭТОМ диске {n, of, label}
 const SUPER = ['Карты', '3× Superluminal Acceleration Card'], IOMODE = ['Режим', 'Move to output when cell/network is empty'];
-function FILL(name, sub, w){
+function FILL0(name, sub, w){
   const P = sub.startsWith('Pending'), I = sub.startsWith('Input'), E = sub.startsWith('Подсеть энтанглера'), N = sub.startsWith('Наниты');
   switch (name) {
     case 'Dual Interface (mainnet)': return {rows:[['Паттерны', 'паттерны BEC — умноженные (вход: исходные жидкости и предметы, выход: продукт узла)'], ['Карты', 'Blocking Card'], ['Режим', 'Smart Blocking вкл.'], ['Сторона', 'ключом развернуть в Pending']]};
@@ -558,6 +568,49 @@ function FILL(name, sub, w){
   }
   return null;
 }
+// GUI-макеты (как в игре): ME Drive, интерфейсы, IO Port
+function GUI(name, sub, w){
+  const P = sub.startsWith('Pending'), I = sub.startsWith('Input'), E = sub.startsWith('Подсеть энтанглера'), N = sub.startsWith('Наниты');
+  const cell = (icon, label, tip, cls) => ({icon, label, tip, cls});
+  switch (name) {
+    case 'ME Drive': {
+      if (P) return {type:'drive', cells:Array(8).fill(cell('AEI_CellSingularity', '', 'Item Digital Singularity'))};
+      if (I) return {type:'drive', cells:Array(10).fill(cell('AEI_CellSingularity', '', 'Item Digital Singularity'))};
+      if (E) return {type:'drive', cells:Array(10).fill(cell('AEI_CellSingularity', 'F', 'Fluid Digital Singularity', 'fluid'))};
+      if (N) return {type:'drive', cells:[cell('AEI_Cell16384k', 'P', '16384k Item Cell: partition 10 нанитов, Equal Distribution, Types 10')]};
+      return null;
+    }
+    case 'ME Drive (сырьё)': return {type:'drive', cells:[], note:'ваши ячейки основной сети'};
+    case 'Dual Interface (mainnet)': return {type:'iface', title:'ME Dual Interface', pats:Array(7).fill(cell('AEI_Pattern', '×K', 'паттерн BEC, умножен на размер партии K')), cards:[cell('AEI_CardBlocking', '', 'Blocking Card')], btns:['Блокировка: Smart', 'ключом → Pending'], note:'28 рецептов на 4 интерфейса ≈ 7 паттернов в каждом; больше 9 — Pattern Capacity Card'};
+    case 'Dual Interface (копия)': return {type:'iface', title:'ME Dual Interface (копия)', pats:Array(7).fill(cell('AEI_Pattern', '×1', 'тот же паттерн без множителя')), cards:[], btns:['не в сети AE'], note:'те же слоты, что у интерфейса в основной сети'};
+    case 'P2P Dual Interface + Fake Crafting Card': return {type:'iface', title:'P2P Dual Interface', pats:Array.from({length:10}, (_, i) => cell('AEI_Pattern', String(i+1), `нанит → нанит, выход переименован в «${i+1}», размер 30 720 / Матриц`)), cards:[cell('AEI_CardFake', '', 'Fake Crafting Card'), cell('AEI_CardPatternCapacity', '', 'Pattern Capacity Card: +9 слотов паттернов')], btns:['Блокировка: обычная (не Smart)']};
+    case 'ME Interface': return {type:'iface', title:'ME Interface', pats:[], cards:[], btns:[], note:'пустой: адаптер только читает сеть Input'};
+    case 'ME Fluid Interface (подсеть энтанглера)': return {type:'iface', title:'ME Fluid Interface', pats:[], cards:[], btns:[], note:'пустой: «окно» подсети для storage bus'};
+    case 'ME IO Port': {
+      const sup = Array(3).fill(cell('AEI_CardSuperluminal', '', 'Superluminal Acceleration Card'));
+      if (P) return {type:'io', cells:[], cards:sup, dir:'→ в ячейку', btns:['Move to output when cell/network is empty']};
+      if (I) return {type:'io', cells:[cell('AEI_Cell16384k', '', '16384k Item Cell (для Врат — Artificial Universe)')], cards:sup, dir:'← в сеть', btns:['Move to output when cell/network is empty']};
+      if (N && w[1] > 0) return {type:'io', cells:[], out:[cell('AEI_Cell16384k', '∅', 'любая пустая ячейка-пустышка — обязательно')], cards:sup, dir:'', btns:[]};
+      return {type:'io', cells:[], cards:sup, dir:'', btns:[]};
+    }
+  }
+  return null;
+}
+function FILL(name, sub, w){ const f = FILL0(name, sub, w), g = GUI(name, sub, w); if (f && g) { f.gui = g; delete f.slots; } return f; }
+function guiHTML(g, esc){
+  if (!g) return '';
+  const sl = (c, cls) => `<span class="sl ${cls || ''} ${c && c.cls || ''}"${c && c.tip ? ` title="${esc(c.tip)}"` : ''}>${c && c.icon && TEX[c.icon] ? `<img src="${TEX[c.icon]}" alt="">` : ''}${c && c.label ? `<b>${esc(c.label)}</b>` : ''}</span>`;
+  const grid = (n, cols, items, cls) => `<div class="mcg" style="grid-template-columns:repeat(${cols},var(--s))">${Array.from({length:n}, (_, i) => sl(items[i], cls)).join('')}</div>`;
+  const btns = (g.btns || []).map(b => `<span class="mcb">${esc(b)}</span>`).join('');
+  const note = g.note ? `<p class="mcn">${esc(g.note)}</p>` : '';
+  if (g.type === 'drive') return `<div class="mc"><div class="mct">ME Drive</div>${grid(10, 2, g.cells)}<p class="mcn">в этот диск: ${g.cells.length} из 10</p>${note}</div>`;
+  if (g.type === 'iface') {
+    const rows = Math.max(1, Math.min(4, Math.ceil(g.pats.length / 9)));
+    return `<div class="mc iface"><div class="mct">${esc(g.title)}</div><div class="mcrow"><div><div class="mcl">Config</div>${grid(9, 9, [])}<div class="mcl">Паттерны</div>${grid(rows*9, 9, g.pats)}</div><div><div class="mcl">Карты</div>${grid(4, 1, g.cards)}</div></div>${btns}${note}</div>`;
+  }
+  if (g.type === 'io') return `<div class="mc"><div class="mct">ME IO Port</div><div class="mcrow"><div><div class="mcl">Вход</div>${grid(6, 2, g.cells)}</div><div class="mcdir">${esc(g.dir || '')}</div><div><div class="mcl">Выход</div>${grid(6, 2, g.out || [])}</div><div><div class="mcl">Карты</div>${grid(3, 1, g.cards)}</div></div>${btns}${note}</div>`;
+  return '';
+}
 // для шлюзов мультиблоков
 const FILL_SP = {
   inbus:{rows:[['Настройка', 'включить авто-пополнение (stocking), refresh 5 тиков'], ['Связь', 'пурпурный коннектор → хаб Input']]},
@@ -568,7 +621,7 @@ const FILL_SP = {
 function fillHTML(f, esc){
   if (!f) return '';
   const grid = f.slots ? `<div class="slots" title="ячейки в этом диске">${Array.from({length:f.slots.of}, (_, i) => `<i class="${i < f.slots.n ? 'on' : ''}">${i < f.slots.n ? esc(f.slots.label) : ''}</i>`).join('')}</div><p class="small">в этот диск: ${f.slots.n} из ${f.slots.of}</p>` : '';
-  return `<div class="fill"><h4>Что вставить и как настроить</h4><dl>${f.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${grid}</div>`;
+  return `<div class="fill"><h4>Что вставить и как настроить</h4><dl>${f.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${f.gui ? guiHTML(f.gui, esc) : grid}</div>`;
 }
 function aeBox(w, side, top, front, dir, name){
   const mm = n => typeof n === 'string' ? ocMat(n) : n;

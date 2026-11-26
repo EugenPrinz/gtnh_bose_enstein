@@ -2,6 +2,12 @@
 
 ## Не выпущено
 
+### 2026-11-26 — GUI-макеты в карточках
+- Карточки ME Drive, Dual Interface (основная сеть и копии), P2P Dual Interface нанитов, ME Interface,
+  ME Fluid Interface и ME IO Port показывают окно как в игре: слоты с иконками ячеек, паттернов и карт
+  (текстуры AE2: Digital Singularity, 16384k, Encoded Pattern, Blocking / Fake Crafting / Pattern Capacity /
+  Superluminal), кнопки режимов. Подпись на паттерне: ×K, ×1 или номер тира нанита. Иконки — `tex/AEI_*.png`.
+
 ### 2026-11-26 — челнок и «звонок» Input
 - 3D: Storage Bus Input — деталь на кабеле Input (рядом со входом P2P OC) лицом в корпус-«звонок», а не надпись
   на корпусе. Корпус — отдельный блок GT вне AE с Item Detector cover → Redstone I/O.
