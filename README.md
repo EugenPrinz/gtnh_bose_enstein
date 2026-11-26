@@ -8,9 +8,10 @@
 Установка на сервер OC (нужна Internet Card):
 ```
 wget -f https://raw.githubusercontent.com/EugenPrinz/gtnh_bose_enstein/main/bec/install.lua /home/install-bec.lua
-install-bec            # и для обновления — то же самое
+install-bec            # и для обновления — то же самое; --force — переустановить ту же версию
 cd /home/bec && becctl probe
 main            # управление линией: экран, кнопки Пауза / Diag / Сброс, выход — Q
+becctl version  # установленная версия
 ```
 
 Механика сверена с исходниками `GTNewHorizons/GT5-Unofficial`, тег `5.09.54.275` (это GT5U в GTNH 2.9.1):

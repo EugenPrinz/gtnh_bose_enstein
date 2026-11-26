@@ -148,15 +148,21 @@ S["вызов пропавшего метода не роняет програм
   T.ok(err2:find("adapter gone"))
 end
 
-S["install.lua ставит все модули bec/"] = function()
-  local src = io.open("bec/install.lua"):read("a")
+S["манифест version.lua: все модули bec/ с точными размерами"] = function()
+  local V = dofile("bec/version.lua")
+  T.ok(V.version:match("^%d+%.%d+%.%d+$"), "версия semver")
   local listed = {}
-  for f in src:match("FILES = (%b{})"):gmatch('"([^"]+%.lua)"') do listed[f] = true end
+  for _, e in ipairs(V.files) do listed[e[1]] = e[2] end
   local p = io.popen("cd bec && find . -name '*.lua' | sed 's#^./##'")
   for f in p:lines() do
-    if f ~= "install.lua" then T.ok(listed[f], "install.lua не ставит " .. f) end
+    if f ~= "install.lua" and f ~= "version.lua" then
+      T.ok(listed[f], "нет в манифесте: " .. f .. " — запустить tools/release.py")
+      local h = io.open("bec/" .. f, "rb"); local n = #h:read("a"); h:close()
+      T.eq(listed[f], n, "размер " .. f .. " устарел — запустить tools/release.py")
+    end
   end
   p:close()
+  T.ok(io.open("bec/install.lua"):read("a"):find("version.lua", 1, true), "установщик читает манифест")
 end
 
 S["тир нанитов по названию выхода паттерна"] = function()
@@ -170,6 +176,53 @@ S["тир нанитов по названию выхода паттерна"] =
   T.eq(A.tierOfLabel("Magmatter Nanites"), 10)
   T.eq(A.tierOfLabel("4"), 4)
   T.eq(A.tierOfLabel("Gold Ingot"), nil)
+end
+
+-- install.lua в песочнице: internet отдаёт файлы репозитория (или подменённые), DEST — временный каталог
+local function runInstall(dest, opts, serve)
+  local src = io.open("bec/install.lua"):read("a")
+  src = src:gsub('"/home/bec/"', '"' .. dest .. '/"'):gsub('"/home/install%-bec%.lua"', '"' .. dest .. '/install-bec.lua"')
+  local out = {}
+  local env = setmetatable({print = function(...) out[#out + 1] = table.concat({...}, " ") end}, {__index = _G})
+  local stubs = {
+    shell = {parse = function() return {}, opts or {} end},
+    filesystem = {makeDirectory = function(d) os.execute("mkdir -p '" .. d .. "'") end,
+      path = function(p) return p:match("^(.*/)") or "" end,
+      remove = function(p) os.remove(p) end, rename = function(a, b) os.rename(a, b) end},
+    internet = {request = function(url)
+      local f = url:match("/bec/(.+)$")
+      local body = serve and serve(f)
+      if body == nil then local h = io.open("bec/" .. f, "rb"); body = h and h:read("a") or "404: Not Found"; if h then h:close() end end
+      local done = false
+      return function() if done then return nil end done = true return body end
+    end},
+  }
+  env.require = function(n) return stubs[n] or require(n) end
+  assert(load(src, "=install.lua", "t", env))()
+  return table.concat(out, "\n")
+end
+
+S["install-bec: установка, «обновлений нет», старая копия из кеша не ставится"] = function()
+  local dest = os.tmpname(); os.remove(dest); os.execute("mkdir -p " .. dest)
+  local V = dofile("bec/version.lua")
+  local out = runInstall(dest)
+  T.ok(out:find("не установлено → " .. V.version, 1, true), out)
+  T.ok(io.open(dest .. "/line.lua") and io.open(dest .. "/version.lua") and io.open(dest .. "/install-bec.lua"))
+  out = runInstall(dest)
+  T.ok(out:find("обновлений нет", 1, true), out)
+  -- новая версия, но line.lua из кеша старый: ничего не меняется
+  local newer = io.open("bec/version.lua"):read("a"):gsub('version = "[%d.]+"', 'version = "99.0.0"')
+  out = runInstall(dest, {}, function(f)
+    if f == "version.lua" then return newer end
+    if f == "line.lua" then return "-- старая копия" end
+  end)
+  T.ok(out:find("старая копия из кеша", 1, true) and out:find("осталась версия " .. V.version, 1, true), out)
+  T.eq(dofile(dest .. "/version.lua").version, V.version)
+  local p = io.popen("ls " .. dest .. "/*.new " .. dest .. "/*/*.new 2>/dev/null"); local left = p:read("a"); p:close()
+  T.eq(left, "", "временные файлы убраны")
+  out = runInstall(dest, {force = true})
+  T.ok(out:find(V.version .. " → " .. V.version, 1, true), out)
+  os.execute("rm -rf " .. dest)
 end
 
 return S

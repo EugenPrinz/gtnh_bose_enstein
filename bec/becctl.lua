@@ -1,11 +1,12 @@
 -- becctl — служебные команды линии BEC (OpenOS).
 --   becctl probe [--fix] [--reset]   найти машины, проверить, сохранить раскладку узлов
 --   becctl diag [файл]               снимок всех машин в файл (по умолчанию /home/bec-diag.txt)
+--   becctl version                   установленная версия
 local dir = (debug.getinfo(1, "S").source:match("^@(.*/)") or "./")
 package.path = dir .. "?.lua;" .. package.path
 -- OpenOS держит модули require в памяти до перезагрузки: после install-bec выгружаем свои, чтобы взять новые
 for name in pairs(package.loaded) do
-  if name:match("^hal%.") or name:match("^model%.") then package.loaded[name] = nil end
+  if name:match("^hal%.") or name:match("^model%.") or name == "version" then package.loaded[name] = nil end
 end
 
 local component = require("component")
@@ -99,8 +100,13 @@ end
 local cmd = args[1]
 if cmd == "probe" then cmdProbe()
 elseif cmd == "diag" then cmdDiag()
+elseif cmd == "version" then
+  local ok, V = pcall(require, "version")
+  if ok and type(V) == "table" then print(string.format("BEC %s (%s), файлов: %d", V.version, tostring(V.date), #V.files))
+  else print("версия неизвестна: нет version.lua — обновить: install-bec --force") end
 else
   print("becctl probe [--fix] [--reset] — найти машины, проверить, сохранить раскладку узлов")
   print("  --fix  — фиктивный фильтр затвора и включение Поля (только между партиями)")
   print("becctl diag [файл] — снимок всех машин для разбора проблем")
+  print("becctl version — установленная версия")
 end

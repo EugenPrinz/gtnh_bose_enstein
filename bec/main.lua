@@ -3,7 +3,7 @@
 local dir = (debug.getinfo(1, "S").source:match("^@(.*/)") or "./")
 package.path = dir .. "?.lua;" .. package.path
 for name in pairs(package.loaded) do
-  if name:match("^hal%.") or name:match("^model%.") or name == "line" or name == "ui" or name == "log" or name == "config" then
+  if name:match("^hal%.") or name:match("^model%.") or name == "line" or name == "ui" or name == "log" or name == "config" or name == "version" then
     package.loaded[name] = nil
   end
 end
@@ -16,6 +16,8 @@ local filesystem = require("filesystem")
 local shell = require("shell")
 local term = require("term")
 local Line = require("line")
+local okV, V = pcall(require, "version")
+local VERSION = okV and type(V) == "table" and V.version or "?"
 local UI = require("ui")
 local Log = require("log")
 local config = require("config")
@@ -72,6 +74,7 @@ local d = {
 
 local gpu = component.gpu
 local ui = UI.new(gpu)
+ui.version = VERSION
 local line = Line.new(d)
 
 -- события — через слушатели: os.sleep внутри шагов автомата их не теряет
@@ -113,7 +116,7 @@ local function draw() pcall(ui.draw, ui, line:view()) end
 
 local nLayout = 0
 for _ in pairs(d.layout or {}) do nLayout = nLayout + 1 end
-log:info("старт BEC, раскладка узлов: " .. nLayout)
+log:info("старт BEC " .. VERSION .. ", раскладка узлов: " .. nLayout)
 guard(line.init, line)
 draw()
 
@@ -151,6 +154,7 @@ while running do
       cleanup()
       shell.execute(dir .. "becctl.lua", nil, "diag")
       ui = UI.new(gpu)
+      ui.version = VERSION
       event.listen("touch", onTouch); event.listen("redstone_changed", onRedstone); event.listen("key_down", onKey)
       log:info("снимок: /home/bec-diag.txt")
     end

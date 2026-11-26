@@ -1,0 +1,26 @@
+-- Генерируется tools/release.py — не править руками.
+return {
+  version = "0.3.0", date = "2026-11-26",
+  files = {
+    {"becctl.lua", 4904},
+    {"config.lua", 1888},
+    {"line.lua", 18728},
+    {"log.lua", 1122},
+    {"main.lua", 6226},
+    {"ui.lua", 11897},
+    {"hal/ae.lua", 10383},
+    {"hal/diode.lua", 3127},
+    {"hal/gtbase.lua", 3219},
+    {"hal/machine.lua", 588},
+    {"hal/nanites.lua", 5713},
+    {"hal/node.lua", 3318},
+    {"hal/probe.lua", 7220},
+    {"hal/shuttle.lua", 1120},
+    {"hal/storage.lua", 1866},
+    {"model/data.lua", 49450},
+    {"model/entangler.lua", 4132},
+    {"model/recipe.lua", 6332},
+    {"model/strategy.lua", 5191},
+    {"model/timing.lua", 3921},
+  },
+}

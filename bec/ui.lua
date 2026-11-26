@@ -111,7 +111,7 @@ function U:draw(v)
   g.setBackground(C.bg); g.fill(1, 1, W, H, " ")
   -- верхняя строка
   local b = v.batch
-  local head = "BEC · " .. (b and (b.name .. " ×" .. b.copies) or "нет партии") .. " · " .. v.phaseRu
+  local head = "BEC" .. (self.version and (" " .. self.version) or "") .. " · " .. (b and (b.name .. " ×" .. b.copies) or "нет партии") .. " · " .. v.phaseRu
   if v.strategy then head = head .. " · " .. v.strategy end
   if v.steps then
     local t = {}

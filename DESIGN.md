@@ -155,7 +155,8 @@ bec/
   ui.lua              ✓ экран (GPU, буфер видеопамяти если есть), кнопки Пауза / Diag / Сброс, Поле: Изменить / Авто
   log.lua             ✓ журнал: 40 строк в памяти + /home/bec.log с ротацией в .old
   becctl.lua          ✓ probe [--fix] [--reset], diag
-  install.lua         ✓ установка/обновление с GitHub (Internet Card) в /home/bec
+  install.lua         ✓ установка/обновление с GitHub (Internet Card) в /home/bec: по манифесту, сверка размеров, замена разом
+  version.lua         ✓ манифест: версия (semver), дата, файлы с размерами — генерирует tools/release.py
   hal/                ✓
     gtbase.lua        общие методы GT (работа, энергия, getName/getCoordinates), безопасный call()
     node.lua          bec_io_node: состояние, шаги (index от 1), тиры, конденсат в типах модели, setParallel
@@ -296,6 +297,7 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 6. v2: подача конденсата по ходу крафта.
 
 ## 9. Журнал решений
+- 2026-11-26 — версии: `bec/version.lua` (semver + файлы с размерами, `tools/release.py [patch|minor|major]`). Без GitHub API: кеш raw.githubusercontent ловится сверкой размеров, файлы ставятся только все разом. Версия — в шапке `main`, журнале, `becctl version`.
 - 2026-11-26 — выход паттерна нанитов **обязательно переименован** (в номер тира): GTNH AE2 `CraftableItemResolver` для паттерна с одинаковым входом и выходом вычитает рекурсивную часть, «64 X → 64 X» даёт выход 0 → FAILURE → `request failed (missing resources?)` (проверено в игре). Тир программа берёт из названия выхода («1»…«10», понимает и «Gold Nanites»), запас — по тирам из `getItemsInNetwork`. Craftable в OC GTNH — `getStack`/`request`, методы — вызываемые объекты.
 - 2026-11-26 — запас конденсата: жидкости можно убрать из паттернов (основного и копий), конденсат — пассивом в подсеть энтанглера порциями под напряжённость Поля. Потребность партии тогда — из `model/data` (опознание рецепта по предметам копии).
 - 2026-11-26 — IO Port нанитов (по `TileIOPort` GTNH AE2): в выход руками и Transposer'ом не положить (`canInsertItem` — только вход), из входа не забрать (`canExtractItem` — только выход). Метка — пустая ячейка в выходе 8…12 (порт кладёт её сам: 2 ячейки во вход, из 7 забрать). Режим обоих портов — «Move to output when work is done»: в «when empty» при заполнении ячейка выходит только если что-то перенесла (`matches(EMPTY, FILL) = didWork`), на пустой шине она застряла бы во входе навсегда.

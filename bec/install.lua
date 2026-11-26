@@ -1,8 +1,11 @@
 -- Установка/обновление BEC в /home/bec (нужна Internet Card).
 --   wget -f https://raw.githubusercontent.com/EugenPrinz/gtnh_bose_enstein/main/bec/install.lua /home/install-bec.lua
---   install-bec                    — установить или обновить (ветка main)
+--   install-bec                    — обновить до последней версии (ветка main), если она новее установленной
+--   install-bec --force            — переустановить, даже если версия та же
 --   install-bec --branch=<ветка>   — другая ветка
--- Каждый файл качается во временный и заменяет старый только при успехе: сбой не портит установленную версию.
+-- Сначала качается манифест version.lua (номер версии + файлы с размерами), затем все файлы во временные.
+-- Размер не совпал — GitHub отдал старую копию из кеша: ничего не ставится, установленная версия цела.
+-- Файлы заменяются только когда скачаны все — смеси старых и новых не бывает.
 local shell = require("shell")
 local filesystem = require("filesystem")
 local internet = require("internet")
@@ -11,12 +14,6 @@ local _, opts = shell.parse(...)
 local branch = type(opts.branch) == "string" and opts.branch or "main"
 local BASE = "https://raw.githubusercontent.com/EugenPrinz/gtnh_bose_enstein/" .. branch .. "/bec/"
 local DEST = "/home/bec/"
-local FILES = {
-  "becctl.lua", "main.lua", "line.lua", "ui.lua", "log.lua", "config.lua",
-  "hal/ae.lua", "hal/shuttle.lua", "hal/nanites.lua",
-  "hal/gtbase.lua", "hal/node.lua", "hal/diode.lua", "hal/storage.lua", "hal/machine.lua", "hal/probe.lua",
-  "model/data.lua", "model/recipe.lua", "model/timing.lua", "model/entangler.lua", "model/strategy.lua",
-}
 
 -- Скачать url целиком; nil, ошибка — при любом сбое (HTTP-код ≠ 200, обрыв, пустой ответ)
 local function fetch(url)
@@ -35,32 +32,78 @@ local function fetch(url)
   return res
 end
 
-print("ветка: " .. branch)
-for _, d in ipairs({"", "hal", "model"}) do filesystem.makeDirectory(DEST .. d) end
-local failed = 0
-for _, f in ipairs(FILES) do
-  local body, err = fetch(BASE .. f)
-  if body then
-    local tmp = DEST .. f .. ".new"
-    local h = assert(io.open(tmp, "w"))
-    h:write(body)
-    h:close()
-    filesystem.remove(DEST .. f)
-    filesystem.rename(tmp, DEST .. f)
-    print(string.format("✓ %-22s %6d байт", f, #body))
-  else
-    failed = failed + 1
-    print("✗ " .. f .. " — " .. err)
+-- Манифест: таблица {version, date, files = {{путь, размер}}}
+local function manifest(src)
+  local f = src and load(src, "=version.lua", "t", {})
+  local ok, t = pcall(f or error)
+  if ok and type(t) == "table" and type(t.version) == "string" and type(t.files) == "table" then return t end
+end
+
+local function installed()
+  local h = io.open(DEST .. "version.lua", "r")
+  if not h then return nil end
+  local s = h:read("*a")
+  h:close()
+  return manifest(s)
+end
+
+local function selfUpdate()
+  local b = fetch(BASE .. "install.lua")
+  if b then
+    local h = io.open("/home/install-bec.lua", "w")
+    if h then h:write(b); h:close() end
   end
 end
--- сам установщик тоже обновляется: новые файлы в списке подхватятся при следующем запуске
-local self_body = fetch(BASE .. "install.lua")
-if self_body then
-  local h = io.open("/home/install-bec.lua", "w")
-  if h then h:write(self_body); h:close(); print("✓ install-bec обновлён") end
+
+print("ветка: " .. branch)
+local src, err = fetch(BASE .. "version.lua")
+local new = manifest(src)
+if not new then
+  print("✗ манифест version.lua не получен: " .. tostring(err or "не читается"))
+  return
 end
-if failed > 0 then
-  print("не скачано: " .. failed .. " — старые версии этих файлов не тронуты")
-else
-  print("готово: " .. DEST .. " — проверка: cd /home/bec && becctl probe; запуск: main")
+local old = installed()
+local oldV = old and old.version or "не установлено"
+if old and old.version == new.version and not opts.force then
+  print("обновлений нет: " .. new.version .. " (" .. tostring(new.date) .. ")  · переустановить: install-bec --force")
+  selfUpdate()
+  return
 end
+print(string.format("версия: %s → %s (%s)", oldV, new.version, tostring(new.date)))
+
+-- 1. всё во временные файлы, со сверкой размера
+local staged, bad = {}, 0
+for _, e in ipairs(new.files) do
+  local f, size = e[1], e[2]
+  filesystem.makeDirectory(filesystem.path(DEST .. f))
+  local body, ferr = fetch(BASE .. f)
+  if not body then
+    bad = bad + 1
+    print("✗ " .. f .. " — " .. ferr)
+  elseif #body ~= size then
+    bad = bad + 1
+    print(string.format("✗ %-22s %6d байт, ждали %d — старая копия из кеша GitHub", f, #body, size))
+  else
+    local h = assert(io.open(DEST .. f .. ".new", "w"))
+    h:write(body)
+    h:close()
+    staged[#staged + 1] = f
+    print(string.format("✓ %-22s %6d байт", f, #body))
+  end
+end
+if bad > 0 then
+  for _, f in ipairs(staged) do filesystem.remove(DEST .. f .. ".new") end
+  print(string.format("не установлено: %d файлов не сошлись, осталась версия %s. Повторить через 2–5 минут.", bad, oldV))
+  return
+end
+
+-- 2. всё скачано — заменить разом, манифест последним
+for _, f in ipairs(staged) do
+  filesystem.remove(DEST .. f)
+  filesystem.rename(DEST .. f .. ".new", DEST .. f)
+end
+local h = assert(io.open(DEST .. "version.lua", "w"))
+h:write(src)
+h:close()
+selfUpdate()
+print("готово: BEC " .. new.version .. " в " .. DEST .. " — проверка: cd /home/bec && becctl probe; запуск: main")
