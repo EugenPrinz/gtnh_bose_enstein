@@ -57,6 +57,12 @@ S["probe: не собрано, нет Поля, лишний затвор, чу�
   T.ok(not r.ok)
 end
 
+S["probe: узел без энергохетча — не E-FORM (у узлов их нет)"] = function()
+  local f = line(2, {formed = {node = false}})
+  local r = probe.run(f:api())
+  for _, e in ipairs(r.errors) do T.ok(e.code ~= "E-FORM", e.msg) end
+end
+
 S["probe: номера узлов держатся за координаты"] = function()
   local f = line(3, {nodeCoords = {{30, 2, 8}, {10, 2, 8}, {20, 2, 8}}})
   local r1 = probe.run(f:api())

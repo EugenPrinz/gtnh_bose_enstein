@@ -81,10 +81,10 @@ function P.run(component, opts)
     add(r.errors, "E-DUP", "узлов " .. #r.node .. ", у одной Матрицы не больше " .. (opts.maxNodes or 16), "лишние адаптеры от другой линии?")
   end
 
-  -- собранность
+  -- собранность: только у машин с энергохетчами. У IO Node их нет (питание — от Матрицы через LoS),
+  -- его getEUMaxStored всегда 0, поэтому узлы так не проверяются.
   local all = {}
   for _, k in ipairs(SINGLE) do if r[k] then all[#all + 1] = {k, r[k]} end end
-  for i, n in ipairs(r.node) do all[#all + 1] = {"node", n, i} end
   for _, e in ipairs(all) do
     if not e[2]:formed() then
       add(r.errors, "E-FORM", RU[e[1]] .. (e[3] and (" " .. e[3]) or "") .. ": не собран или нет энергохетча (getEUMaxStored = 0)",
