@@ -510,7 +510,7 @@ const AE_ROLE = {
   'Wireless Hub (выходы узлов)':'Белый хаб основной сети: к нему привязаны белые коннекторы Output Bus (ME) всех узлов (16 каналов из 32). Результат приходит сюда, CPU закрывает крафт.',
   'Dual Interface (mainnet)':'Держит умноженные паттерны BEC (вход — исходные жидкости и предметы). Blocking Mode вкл. + Loose Mode, повёрнут ключом в Pending.',
   'Dual Interface (копия)':'Те же паттерны без множителя, не в сети AE. Программа сравнивает с ними партию и считает число копий.',
-  'Adapter → me_interface (копии паттернов)':'Адаптер OC: читает паттерны из соседнего Dual Interface.',
+  'Adapter → fluid_interface (копии паттернов)':'Адаптер OC: читает паттерны из соседнего Dual Interface.',
   'ME Controller':'Контроллер своей подсети. Цвет кабеля у каждой подсети свой, чтобы они не слились.',
   'ME Drive':'Диск подсети.',
   'Wireless Connector → энтанглер':'Связывает Pending с подсетью энтанглера: жидкости из паттерна сразу уходят туда.',
@@ -541,7 +541,7 @@ const AE_ROLE = {
   'Wireless Connector + Storage Bus (двусторонний)':'Двусторонний storage bus на Nanite Containment Bus: шина становится хранилищем подсети нанитов.',
   'Wireless Connector → Input':'Пурпурный коннектор: Advanced Stocking Input Bus узла видит Input-подсеть (refresh 5 тиков).',
   'Wireless Connector → Mainnet':'Белый коннектор: Output Bus (ME) узла сдаёт результат в основную сеть.'};
-const AE_COMP = {'Adapter → me_interface (копии паттернов)':'me_interface', 'Adapter → me_interface (Input)':'me_interface', 'Adapter → me_controller (наниты)':'me_controller', 'Transposer':'transposer', 'Redstone I/O':'redstone'};
+const AE_COMP = {'Adapter → fluid_interface (копии паттернов)':'fluid_interface (getInterfacePattern(слот 1..36))', 'Adapter → me_interface (Input)':'me_interface (getItemsInNetwork) — единственный в сборке', 'Adapter → me_controller (наниты)':'me_controller', 'Transposer':'transposer', 'Redstone I/O':'redstone'};
 // текстура, повёрнутая на q четвертей по часовой (стрелки направления)
 function rotMat(n, q){ const k = 'rot'+n+q; if (matCache[k]) return matCache[k]; const im = IMG[n], c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.translate(c.width/2, c.height/2); g.rotate(q*Math.PI/2); g.drawImage(im, -im.width/2, -im.height/2); return matCache[k] = new THREE.MeshLambertMaterial({map:mkTex(c)}); }
 function ovlMat(base, ovl){ const k = 'ovl'+base+ovl; return matCache[k] || (matCache[k] = new THREE.MeshLambertMaterial({map:mkTex(composite(base, [[ovl]]))})); }
@@ -756,7 +756,7 @@ function buildAE(){
   for (let i = 0; i < 4; i++) aeBox([-34+i, 0, 8], 'AE_BlockInterfaceAlternate', null, null, DIR_PZ, 'Dual Interface (mainnet)');
   // копии паттернов без множителя: не в сети, рядом адаптеры OC
   AE_SUB = 'не в сети AE (копии паттернов для OC)';
-  for (let i = 0; i < 4; i++) { aeBox([-34+i, 0, 6], 'FC_fluid_interface', null, null, null, 'Dual Interface (копия)'); aeBox([-34+i, 1, 6], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → me_interface (копии паттернов)'); }
+  for (let i = 0; i < 4; i++) { aeBox([-34+i, 0, 6], 'FC_fluid_interface', null, null, null, 'Dual Interface (копия)'); aeBox([-34+i, 1, 6], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → fluid_interface (копии паттернов)'); }
   // Pending (чёрная)
   AE_SUB = 'Pending (чёрная)';
   aeBox([-34,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); DRIVE([-33,0,9]); DRIVE([-32,0,9]);
