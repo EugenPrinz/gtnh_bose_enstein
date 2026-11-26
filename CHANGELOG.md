@@ -2,6 +2,13 @@
 
 ## Не выпущено
 
+### 2026-11-26 — приёмные интерфейсы Pending
+- В игре заказ завис «Scheduled · Blocking Mode»: Dual Interface смотрели в ME Drive/контроллер Pending (диск —
+  инвентарь ячеек). Схема: перед каждым Dual Interface основной сети — пустой ME Interface сети Pending (приём);
+  Dual Interface сдвинуты на z=7, копии — на z=5 (ни одного соседнего ME-блока). Повёрнутая грань интерфейса
+  связь не пропускает (`TileInterface.setOrientation` → `setValidSides(complementOf(pointAt))`) — сети не сливаются.
+  Карточки, сводная таблица, шаг «Pending и челнок», DESIGN §2.1. 135 блоков AE2 без пересечений.
+
 ### 2026-11-26 — becctl: свежие модули
 - OpenOS кэширует `require` до перезагрузки: после `install-bec` `becctl probe` работал со старой `hal.probe`
   (ложный E-FORM узла остался). `becctl` теперь выгружает `hal.*` и `model.*` при старте.
