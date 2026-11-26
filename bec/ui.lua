@@ -79,6 +79,25 @@ function U:button(x, y, label, id, col)
   return x + w + 1
 end
 
+-- Строка ввода: рисуется на месте, без перерисовки всего экрана (иначе каждая клавиша ждёт полный кадр)
+function U:inputLine()
+  local y = self.inputY
+  if not y or not self.input then return end
+  self.g.setBackground(C.bg); self.g.fill(1, y, self.W, 1, " ")
+  self:put(2, y, "Напряжённость поля, L: ", C.acc, C.bg)
+  self:put(25, y, " " .. self.input.text .. "_" .. string.rep(" ", 12 - #self.input.text), C.text, C.btn)
+  self:put(41, y, "Enter — применить, Esc — отмена" .. (self.input.err and ("   ✗ " .. self.input.err) or ""),
+    self.input.err and C.err or C.dim, C.bg)
+end
+
+-- Обновить только строку ввода прямо на экране; false — строки ещё нет (нужен полный кадр)
+function U:redrawInput()
+  if not (self.input and self.inputY) then return false end
+  if self.buf then pcall(self.g.setActiveBuffer, 0) end
+  self:inputLine()
+  return true
+end
+
 -- Строка ввода числа: open → key(ch, code) → "apply", число | "cancel" | nil
 function U:openInput(start) self.input = {text = start and tostring(start) or ""} end
 function U:key(ch, code)
@@ -225,10 +244,8 @@ function U:draw(v)
   -- ошибка, строка ввода и журнал
   y = y + rows * 3 + 3
   if self.input then
-    self:put(2, y, "Напряжённость поля, L: ", C.acc, C.bg)
-    self:put(25, y, " " .. self.input.text .. "_" .. string.rep(" ", 12 - #self.input.text), C.text, C.btn)
-    self:put(41, y, "Enter — применить, Esc — отмена" .. (self.input.err and ("   ✗ " .. self.input.err) or ""),
-      self.input.err and C.err or C.dim, C.bg)
+    self.inputY = y
+    self:inputLine()
     y = y + 2
   end
   if v.wait and not v.err then

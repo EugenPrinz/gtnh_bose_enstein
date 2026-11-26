@@ -133,17 +133,21 @@ guard(line.init, line)
 draw()
 
 local running = true
+local nextTick = 0
 while running do
   local acts = pending
   pending = {}
+  local full = false -- нужен полный кадр (кнопка, Enter/Esc); набор цифр — только строка ввода
   for _, a in ipairs(acts) do
+    if type(a) ~= "table" then full = true end
     if type(a) == "table" then
       if ui.input then
         local r, n = ui:key(a.key, a.code)
         if r == "apply" then
           local ok, e = line:setField(n)
-          if ok then ui.input = nil else ui.input.err = tostring(e) end
-        end
+          if ok then ui.input = nil; full = true else ui.input.err = tostring(e); ui:redrawInput() end
+        elseif r == "cancel" then full = true
+        elseif not ui:redrawInput() then full = true end
       elseif a.code == 16 or a.key == string.byte("q") or a.key == string.byte("Q") then running = false -- клавиша Q в любой раскладке
       end
     elseif a == "field" then
@@ -172,9 +176,15 @@ while running do
     end
   end
   if not running then break end
-  guard(line.tick, line)
-  draw()
-  local ok, err = pcall(event.pull, cfg.poll, WAKE)
+  -- автомат — по расписанию (раз в poll), а не на каждое нажатие клавиши
+  local now = computer.uptime()
+  if now >= nextTick then
+    guard(line.tick, line)
+    nextTick = computer.uptime() + cfg.poll
+    full = true
+  end
+  if full then draw(); lastDraw = computer.uptime() end
+  local ok, err = pcall(event.pull, math.max(0.05, nextTick - computer.uptime()), WAKE)
   if not ok then running = false end -- Ctrl+C
 end
 cleanup()

@@ -194,6 +194,12 @@ S["поле вручную: поднять всегда, опустить тол
   local g = fakeGpu(); ui.g = g
   ui:draw(line:view())
   T.ok(g.text():find("Напряжённость поля, L"))
+  -- набор цифр перерисовывает только строку ввода
+  local g2 = fakeGpu(); ui.g = g2
+  ui:key(string.byte("7"), 0)
+  T.ok(ui:redrawInput())
+  T.ok(g2.calls < 20, "полный кадр на клавишу: " .. g2.calls)
+  T.ok(g2.text():find("30057_"), g2.text())
   T.ok(ui:key(nil, 1) == "cancel" and ui.input == nil)
 end
 
