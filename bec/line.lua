@@ -260,6 +260,16 @@ end
 
 -- Сменить тир Матрицы на T: вынуть всё, заказать T (+ старшие)
 function L:supply(T)
+  -- Матрица уже даёт тир T (после перезапуска, ручной подачи, прошлого заказа) — ничего не трогаем
+  for _, a in ipairs(self.st.assign or {}) do
+    local n = self.m.node[a.i]
+    local pt, N = n and n:providedTier(), n and n:nanites() or 0
+    if pt == T and N > 0 then
+      self.st.provided, self.st.N, self.st.unknownNanites = T, N, nil
+      self:save()
+      return true
+    end
+  end
   if self.st.provided or self.st.unknownNanites then
     local ok, e = self.nan:extract(self.d.sleep, self.d.now, self.cfg.cellMoveTimeout)
     if not ok then return nil, "извлечение: " .. e end

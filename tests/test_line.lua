@@ -239,4 +239,27 @@ S["паттерн нанитов есть, запаса нет — E-TIER с п�
   T.ok(logText(d):find("тир 4: в подсети 0, паттерн на 64"), logText(d))
 end
 
+S["после перезапуска наниты уже в Матрице — не извлекать и не заказывать заново"] = function()
+  -- по 64 нанита тиров 1, 2, 4 (как в игре): сборка долгая, перезапуск попадает в середину
+  local few = {}
+  for k, v in pairs(SENSOR) do few[k] = v end
+  few.nanites = {[1] = 64, [2] = 64, [4] = 64}
+  local w, f, d = setup(1, nil, few)
+  local line = Line.new(d)
+  line:init()
+  f:batch(few, 1)
+  local filled = false
+  runUntil(line, f, function()
+    if line.st.phase == "WAIT_COND" and not filled then fill(w, 1); filled = true end
+    return line.st.phase == "RUN" and line.st.provided
+  end)
+  local ext = f.extracted or 0
+  local line2 = Line.new(d)
+  T.ok(line2:init())
+  line2:tick()
+  T.eq(f.extracted or 0, ext, "лишнее извлечение")
+  T.ok(line2.st.provided)
+  T.ok(runUntil(line2, f, function() return f.pulses > 0 and line2.st.phase == "IDLE" end), logText(d))
+end
+
 return S
