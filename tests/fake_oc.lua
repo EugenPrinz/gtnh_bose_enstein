@@ -150,12 +150,24 @@ function F:ae(o)
     getInventorySize = function(side) return (side == 2 or side == 3) and 12 or side == 4 and 27 or nil end,
     getStackInSlot = function(side, slot)
       if side == 2 and slot == 8 then return {label = "метка", size = 1} end
-      if slot == 7 and side == fake.cell then return {label = "cell", size = 1} end
+      if slot == 7 and side == fake.cell and (fake.cellBusy or 0) == 0 then return {label = "cell", size = 1} end
     end,
+    -- IO Port не мгновенный: ячейка 3 тика во входе, потом в выходе 7. Как в игре у верхнего порта в подсети:
+    -- он забирает в ячейку и запас подсети, нижний возвращает его только когда выложит ячейку в выход.
     transferItem = function(from, to, n, fs, ts)
-      if from ~= fake.cell or fs ~= 7 then return 0 end
+      if from ~= fake.cell or fs ~= 7 or (fake.cellBusy or 0) > 0 then return 0 end
       fake.cell = to
-      if to == 2 then fake.extracted = (fake.extracted or 0) + 1; w.asm:setNanites({}) end
+      fake.cellBusy = 3
+      if to == 2 then
+        fake.extracted = (fake.extracted or 0) + 1; w.asm:setNanites({})
+        fake.inCell = fake.naniteStore; fake.naniteStore = {}
+      end
+      fake.jobs[#fake.jobs + 1] = function()
+        fake.cellBusy = fake.cellBusy - 1
+        if fake.cellBusy > 0 then return false end
+        if fake.cell == 3 and fake.inCell then fake.naniteStore = fake.inCell; fake.inCell = nil end
+        return true
+      end
       return 1
     end})
   -- узел сам берёт рецепт, если разрешена работа и в Input хватает копий на minParallel

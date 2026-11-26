@@ -86,6 +86,13 @@ function N:extract(sleep, now, timeout)
   if not ok then return nil, "в порт извлечения: " .. e end
   ok, e = self:move(self.t.marker, self.t.other, sleep, now, timeout)
   if not ok then return nil, "обратно: " .. e end
+  -- ждать, пока порт выгрузки опустошит ячейку и выложит её в выход 7: до этого наниты ещё в ячейке,
+  -- и заказ «нанит → нанит» сразу после извлечения получит missing resources
+  local t0 = now()
+  while not G.call(self.t.p, "getStackInSlot", self.t.other, N.CELL_SLOT) do
+    if now() - t0 > (timeout or 2) * 3 then return nil, "порт выгрузки не вернул ячейку в выход " .. N.CELL_SLOT end
+    sleep(0.05)
+  end
   return true
 end
 
