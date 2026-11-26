@@ -64,6 +64,7 @@ function L:init()
   -- инварианты: Поле и затвор включены
   if not r.storage:allowed() then r.storage:setAllowed(true); self.log:warn("Поле было выключено — включено", "E-FIELD-OFF") end
   if not r.diode:allowed() then r.diode:setAllowed(true); self.log:warn("затвор был выключен — включён", "E-GATE-OFF") end
+  if not r.array:allowed() then r.array:setAllowed(true); self.log:warn("Матрица была выключена — включена (узлы без неё стоят: assembler-offline)", "E-ARRAY-OFF") end
   -- узлы: занятые — продолжаем партию, свободные — выключить, чтобы не хватали предметы сами
   local busy = {}
   for i, n in ipairs(r.node) do
@@ -345,6 +346,10 @@ function L:p_RUN()
     if sl > 0 then self:warnOnce("slow" .. a.i, "E-SLOW", string.format("узел %d: загрязнителей %d — проверить фильтры затвора", a.i, sl)) end
   end
   if not self.m.storage:active() then self:warnOnce("fieldpwr", "E-FIELD-PWR", "Поле не работает — запас под угрозой") end
+  if not self.m.array:allowed() then
+    self.m.array:setAllowed(true)
+    self:warnOnce("array", "E-ARRAY-OFF", "Матрица выключена — включаю (кто-то выключил молотком или по сети?)")
+  end
   if not self.m.diode:active() then
     self.m.diode:setAllowed(true)
     self:warnOnce("gate", "E-GATE-OFF", "затвор не работает — включаю; проверить питание UIV")
@@ -415,7 +420,13 @@ function L:view()
       active = safe(m.storage.active, m.storage), eu = eu or 0, cap = cap or 0, need = st.need, auto = self.cfg.fieldAuto}
   end
   if m.diode then v.gate = {active = safe(m.diode.active, m.diode), filters = safe(m.diode.filters, m.diode) or {}} end
-  if m.array then v.array = {active = safe(m.array.active, m.array)} end
+  if m.array then v.array = {active = safe(m.array.active, m.array), allowed = safe(m.array.allowed, m.array)} end
+  -- что Матрица даёт на самом деле — со слов узла
+  local n1 = m.node and m.node[1]
+  if n1 then
+    local raw = safe(n1.call, n1, "getProvidedTier")
+    v.matrix = {tier = safe(n1.providedTier, n1), name = type(raw) == "table" and raw.name or nil, N = safe(n1.nanites, n1) or 0}
+  end
   local P = {}
   for _, a in ipairs(st.assign or {}) do P[a.i] = a.P end
   for i, n in ipairs(m.node or {}) do

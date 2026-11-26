@@ -231,6 +231,7 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 | `E-FIELD-PWR` | поле: `getStoredEU` < 25 % `getEUMaxStored` или `isMachineActive` = false | крит. | грозит стирание запаса. Не запускать новые партии; проверить питание поля |
 | `E-FIELD-OFF` | поле: `isWorkAllowed` = false | крит. | кто-то выключил поле → `setWorkAllowed(true)`, запас уже мог стереться — сверить `getStoredCondensate` |
 | `E-GATE-OFF` | затвор не работает в ROUTE/RUN | ошибка | `setWorkAllowed(true)`, ждать `isMachineActive`; если не включился — питание UIV |
+| `E-ARRAY-OFF` | Матрица `isWorkAllowed() = false` (в игре: узел `assembler-offline` — по `MTEBECIONode` это Матрица без цикла, `mMaxProgresstime ≤ 0`) | предупреждение | `setWorkAllowed(true)` при старте и в RUN |
 | `E-ARRAY-PWR` | массив неактивен или буфер падает в RUN | ошибка | узлы на паузе (рецепт цел). Проверить питание массива, уменьшить P в конфиге |
 | `E-ENT-STALL` | энтанглер `hasWork`, но `getWorkProgress` не растёт N циклов | предупр. | нет EU или жидкостей; проверить подсеть энтанглера |
 | `E-ENT-IDLE` | запас ниже порога, энтанглер не работает | предупр. | нет жидкостей во входном хетче → проверить доливку |

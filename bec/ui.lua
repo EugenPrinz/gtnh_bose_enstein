@@ -201,7 +201,11 @@ function U:draw(v)
     for _, o in ipairs(v.load) do parts[#parts + 1] = string.format("T%d×%s", o[1], fmt(o[2])) end
     nt = nt .. " (" .. table.concat(parts, " + ") .. ")"
   end
-  if v.array and not v.array.active then nt = nt .. " · Матрица НЕ работает" end
+  if v.matrix and v.matrix.N > 0 then
+    nt = nt .. string.format("   │ в Матрице: %s T%s · %s шт.", tostring(v.matrix.name or "?"), tostring(v.matrix.tier or "?"), fmt(v.matrix.N))
+  end
+  if v.array and v.array.allowed == false then nt = nt .. " · Матрица ВЫКЛЮЧЕНА"
+  elseif v.array and not v.array.active then nt = nt .. " · Матрица НЕ работает" end
   self:box(2, y, W - 2, 3, "Наниты", v.tier and C.ok or C.frame)
   self:put(4, y + 1, nt, C.text, C.panel)
   -- узлы: плитки 4 в ряд

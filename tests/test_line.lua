@@ -262,4 +262,19 @@ S["после перезапуска наниты уже в Матрице — �
   T.ok(runUntil(line2, f, function() return f.pulses > 0 and line2.st.phase == "IDLE" end), logText(d))
 end
 
+S["Матрица выключена — программа включает её при старте"] = function()
+  local w, f, d = setup(1)
+  for _, p in pairs(f.comps) do
+    if p.getName and p.getName() == "multi.bec.assembler" then p.setWorkAllowed(false) end
+  end
+  f:run(2)
+  local line = Line.new(d)
+  T.ok(line:init(), logText(d))
+  f:run(2)
+  T.ok(line.m.array:allowed(), "Матрица не включена")
+  T.ok(logText(d):find("E%-ARRAY%-OFF") or logText(d):find("Матрица была выключена"), logText(d))
+  local g = fakeGpu()
+  require("ui").new(g):draw(line:view())
+end
+
 return S
