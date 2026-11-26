@@ -50,8 +50,13 @@ local function saveCfg(k, v)
 end
 local LAYOUT = "/etc/bec/layout.cfg"
 
+local T0 = computer.uptime()
 local log = Log.new({
-  now = function() return os.date("%H:%M:%S") end,
+  -- реальное время с запуска программы (os.date в OpenOS — игровое: час на экране ≈ 50 с)
+  now = function()
+    local t = math.floor(computer.uptime() - T0)
+    return string.format("%d:%02d:%02d", t // 3600, t % 3600 // 60, t % 60)
+  end,
   append = function(p, line) local f = io.open(p, "a"); if f then f:write(line .. "\n"); f:close() end end,
   size = function(p) return filesystem.size(p) end,
   rotate = function(p) filesystem.remove(p .. ".old"); filesystem.rename(p, p .. ".old") end,
