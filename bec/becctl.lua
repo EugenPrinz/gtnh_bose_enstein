@@ -3,6 +3,10 @@
 --   becctl diag [файл]               снимок всех машин в файл (по умолчанию /home/bec-diag.txt)
 local dir = (debug.getinfo(1, "S").source:match("^@(.*/)") or "./")
 package.path = dir .. "?.lua;" .. package.path
+-- OpenOS держит модули require в памяти до перезагрузки: после install-bec выгружаем свои, чтобы взять новые
+for name in pairs(package.loaded) do
+  if name:match("^hal%.") or name:match("^model%.") then package.loaded[name] = nil end
+end
 
 local component = require("component")
 local serialization = require("serialization")
