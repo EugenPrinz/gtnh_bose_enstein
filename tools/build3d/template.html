@@ -514,7 +514,8 @@ const AE_ROLE = {
   'P2P Dual Interface + Fake Crafting Card':'10 паттернов «нанит → нанит», выход переименован в номер тира. Обычный Blocking, не Smart.',
   'Crafting Storage':'Процессор крафта для фейкового крафта нанитов.', 'Co-Processor':'Ускоряет фейковый крафт.',
   'Wireless Connector → шина нанитов':'Связывает подсеть нанитов с шиной Матрицы.',
-  'Fluid Storage Bus (Insert Only)':'Только вставка: жидкости из Pending попадают на диски подсети энтанглера, обратно не уходят.',
+  'Кабель Pending: Fluid Storage Bus + Quartz Fiber':'Кабель сети Pending с двумя деталями. Fluid Storage Bus (Insert Only) смотрит в Fluid Interface подсети: всё жидкое, что пришло в Pending с заказом, Pending может только положить в подсеть, но не забрать обратно. Quartz Fiber отдаёт подсети питание без каналов — своего контроллера и питания у подсети нет.',
+  'ME Fluid Interface (подсеть энтанглера)':'Вход подсети: storage bus работает только по интерфейсу (Interface / Fluid Interface / Dual), не по ME Drive. Внутрь ничего не кладём.',
   'Wireless Connector ← Pending':'Приёмник жидкостей заказа от Pending.',
   'Wireless Connector + Storage Bus (двусторонний)':'Двусторонний storage bus на Nanite Containment Bus: шина становится хранилищем подсети нанитов.',
   'Wireless Connector → Input':'Пурпурный коннектор: Advanced Stocking Input Bus узла видит Input-подсеть (refresh 5 тиков).',
@@ -533,7 +534,8 @@ function FILL(name, sub, w){
     case 'Machine Hull': return {rows:[['Крышка', 'Machine Controller Cover'], ['Конвейеры', 'Conveyor Module UEV на стороны к IO Port; Export, Conditional вкл.; сверху/снизу — Input Blocking, по бокам — Output Blocking (скрин conveyors.png у Armisael5)']]};
     case 'Hull + Item Detector (storage bus Input)': return {rows:[['Storage bus', 'от Input-подсети: Bidirectional, приоритет 1000'], ['Крышка', 'Item Detector Cover лицом в Redstone I/O']]};
     case 'ME Interface': return {rows:[['Содержимое', 'ничего. Обычный (не Dual) интерфейс: через адаптер программа видит, что пришло в Input']]};
-    case 'Fluid Storage Bus (Insert Only)': return {rows:[['Режим', 'Insert Only'], ['Связь', 'беспроводной коннектор от Pending: жидкости из паттерна уходят сюда']]};
+    case 'Кабель Pending: Fluid Storage Bus + Quartz Fiber': return {rows:[['Fluid Storage Bus', 'Insert Only, лицом в Fluid Interface подсети; приоритет по умолчанию'], ['Quartz Fiber', 'на грань к ME Drive подсети: питание без каналов'], ['Кабель', 'чёрный (Pending), к беспроводному коннектору от Pending']]};
+    case 'ME Fluid Interface (подсеть энтанглера)': return {rows:[['Содержимое', 'ничего: интерфейс нужен только как «окно» подсети для storage bus'], ['Можно', 'Dual Interface вместо Fluid Interface']]};
     case 'P2P Dual Interface + Fake Crafting Card': return {rows:[['Карты', 'Fake Crafting Card'], ['Режим', 'обычный Blocking (не Smart)'], ['Паттерны', '10 шт. «нанит → нанит» для 10 нанитов BEC; выход переименован в номер тира: «1» … «10», вход не переименовывать'], ['Размер', 'нанитов этого тира / число Матриц: 30 720 при одной Матрице']]};
     case 'Crafting Storage': return {rows:[['Назначение', 'CPU для фейкового крафта нанитов; хватит любого объёма']]};
     case 'Co-Processor': return {rows:[['Назначение', 'вместе с Crafting Storage — CPU подсети нанитов']]};
@@ -587,6 +589,29 @@ function aeP2P(w, face, tail, name){
     add(new THREE.Mesh(new THREE.BoxGeometry(ts[0], ts[1], ts[2]), ocMat('AE_CableMagenta'))).position.set(c.x + tail[0]*.25, c.y + tail[1]*.25, c.z + tail[2]*.25);
   }
   AE_BLOCKS.push({w, name}); P2P_CELLS.push(w);
+}
+// Кабель (cable bus) с деталями: plates — пластины на гранях, fiber — кварцевое волокно к грани, tails — куски кабеля
+function aeCableParts(w, cableTex, o, name, rows){
+  const c = V3(w), info = {t:name, what:AE_ROLE[name] || '', rows:[['Подсеть AE2', AE_SUB]].concat(rows || []), fill:FILL(name, AE_SUB, w)};
+  const ud = {pick:true, w, info}, add = m => { m.userData = ud; aeGroup.add(m); return m; };
+  const cm = ocMat(cableTex);
+  add(new THREE.Mesh(new THREE.BoxGeometry(.38,.38,.38), cm)).position.copy(c);
+  const fk = ['px','nx','py','ny','pz','nz'], axis = d => d[0] ? 0 : d[1] ? 1 : 2;
+  for (const pl of o.plates || []) {
+    const ax = axis(pl.face), sz = [.75,.75,.75]; sz[ax] = .125;
+    const fr = fk[ax*2 + (pl.face[ax] > 0 ? 0 : 1)], bk = fk[ax*2 + (pl.face[ax] > 0 ? 1 : 0)];
+    const m = add(new THREE.Mesh(new THREE.BoxGeometry(...sz), fk.map(f => ocMat(f === fr ? pl.front : f === bk ? pl.back : pl.side))));
+    m.position.set(c.x + pl.face[0]*.4375, c.y + pl.face[1]*.4375, c.z + pl.face[2]*.4375);
+  }
+  for (const d of o.fiber || []) {
+    const ax = axis(d), sz = [.12,.12,.12]; sz[ax] = .5;
+    add(new THREE.Mesh(new THREE.BoxGeometry(...sz), ocMat('AE_QuartzFiber'))).position.set(c.x + d[0]*.25, c.y + d[1]*.25, c.z + d[2]*.25);
+  }
+  for (const d of o.tails || []) {
+    const ax = axis(d), sz = [.25,.25,.25]; sz[ax] = .5;
+    add(new THREE.Mesh(new THREE.BoxGeometry(...sz), cm)).position.set(c.x + d[0]*.25, c.y + d[1]*.25, c.z + d[2]*.25);
+  }
+  AE_BLOCKS.push({w, name});
 }
 const DRIVE = w => aeBox(w, 'AE_BlockDriveSide', 'AE_BlockDrive', 'AE_BlockDriveFront', 'pz', 'ME Drive');
 const IOP = w => aeBox(w, 'AE_BlockIOPortSide', 'AE_BlockIOPort', null, null, 'ME IO Port');
@@ -652,13 +677,17 @@ function buildAE(){
   // подсеть энтанглера: у входного шлюза (Advanced Stocking Input Hatch)
   const gen = PL.find(p => p.id === 'gen'), gi = SPEC.BEC_GENERATOR.find(e => e.k === 'inhatch');
   const gD = gen.dirW(DIRL[gi.f]), gW = gen.toW(gi.p), lat = gD[2] ? [1,0,0] : [0,0,1];
-  const e1 = add3(gW, gD), e2 = add3(e1, gD);
-  aeBox(e1, 'FC_fluid_storage_bus', null, null, null, 'Fluid Storage Bus (Insert Only)');
-  // диски — на сторону, дальнюю от адаптера контроллера, и сверху
-  const gAd = key(add3(gen.ctrlW.w, DIRL[gen.ctrlW.d])), gSide = key(add3(e1, lat)) === gAd ? neg3(lat) : lat;
-  DRIVE(add3(e1, gSide)); DRIVE(add3(e1, [0,1,0]));
-  aeBox(e2, WL.black, null, null, null, 'Wireless Connector ← Pending');
-  aeLink([-31,0,9], e2, 0x9aa0aa, 'fluids');
+  // хетч → Fluid Interface (подсеть) → кабель Pending с деталями → коннектор Pending; диски — над интерфейсом и над кабелем
+  const e1 = add3(gW, gD), e2 = add3(e1, gD), e3 = add3(e2, gD), up = [0,1,0];
+  aeBox(e1, 'FC_fluid_interface', null, null, null, 'ME Fluid Interface (подсеть энтанглера)');
+  DRIVE(add3(e1, up)); DRIVE(add3(e2, up));
+  AE_SUB = 'Pending (чёрная)';
+  aeCableParts(e2, 'AE_CableBlack', {plates:[{face:neg3(gD), front:'FC_fluid_storage_bus', back:'AE_StorageBusSide', side:'AE_StorageBusSide'}], fiber:[up], tails:[gD]},
+    'Кабель Pending: Fluid Storage Bus + Quartz Fiber',
+    [['Детали', 'Fluid Storage Bus (Insert Only) — лицом в Fluid Interface; Quartz Fiber — вверх, в ME Drive'], ['Важно', 'грани с деталями не соединяют сети — кабель остаётся в Pending']]);
+  aeBox(e3, WL.black, null, null, null, 'Wireless Connector ← Pending'); window.AE_ENT_E2 = e2; // для тестов схемы
+  AE_SUB = 'Подсеть энтанглера';
+  aeLink([-31,0,9], e3, 0x9aa0aa, 'fluids');
   // storage bus на шине нанитов Матрицы
   AE_SUB = 'Наниты (бирюзовая)';
   const asm = asmP(), ni = SPEC.BEC_ASSEMBLER.find(e => e.k === 'nanite'), nW = add3(asm.toW(ni.p), asm.dirW(DIRL[ni.f]));
@@ -785,7 +814,7 @@ const STEPS = [
   {t:'AE2 · основная сеть', show:'all', cam:()=>[[-33,1,10], 30, [.3,.55,.8]], note:()=>`<p>С линией основная сеть связана <b>только в двух местах</b>:</p><ul><li><b>Заказ</b> — Dual Interface с умноженными паттернами BEC (кабелем от основной сети, ключом в Pending). CPU выталкивает предметы и исходные жидкости, сырьё списывается из запасов.</li><li><b>Результат</b> — белый хаб: к нему привязаны коннекторы Output Bus (ME) всех ${K} узл. (${K} каналов из 32). Готовое приходит сюда, CPU закрывает крафт.</li></ul><p>Запасы сырья (расплавы, DSS, предметы, наниты-ингредиенты) лежат в основной сети. Pending, Input, наниты и подсеть энтанглера к ней <b>не подключены</b>.</p><p class="small">Серый пунктир «доливка запаса» — открытый вопрос DESIGN.md: чем программа будет переносить точные порции расплавов в подсеть энтанглера.</p>`},
   {t:'AE2 · Pending и челнок', show:'all', cam:()=>[[-31,1,8], 26, [.35,.55,.75]], note:()=>`<p><b>Mainnet</b>: Dual Interface с <b>умноженными</b> паттернами BEC (вход — исходные жидкости, не запутанные), Blocking Card + Smart Blocking, ключом повернуть в Pending. Рядом — такие же Dual Interface <b>не в сети</b> с <b>немножёнными</b> копиями и адаптерами OC: по ним программа считает число копий.</p><p><b>Pending</b> (чёрная): ME Controller, 2 ME Drive, беспроводной коннектор к энтанглеру, 2 IO Port (3× Superluminal Acceleration Card, «Move to output when cell/network is empty»), 2 корпуса машины с конвейерами UEV и Machine Controller cover, Redstone I/O на красном сплаве. В верхний IO Port — ячейка 16384k (для крафтов Врат — Artificial Universe cell).</p>`},
   {t:'AE2 · Input → узлы', show:'all', cam:()=>[[-10,8,4], 70, [.55,.5,.75]], note:()=>`<p><b>Input</b> (пурпурная): ME Controller, обычный (не Dual) ME Interface + адаптер, 2 ME Drive, 4 беспроводных хаба для узлов + 1 хаб для OC P2P к затвору, полю, энтанглеру, Матрице.</p><p>На каждом узле: пурпурный коннектор → <b>Advanced Stocking Input Bus</b> (включить, refresh 5 тиков), белый коннектор → <b>Output Bus (ME)</b> в Mainnet. Коннекторы узлов делить поровну между 4 хабами.</p><p>Корпус со storage bus на Input (высокий приоритет) и Item Detector cover → Redstone I/O: сигнал «ячейка пуста».</p>`},
-  {t:'AE2 · подсеть энтанглера', show:'all', cam:()=>[add3(AE_POS.ent,[0,-1,0]), 28, [.6,.5,.7]], note:()=>`<p>На энтанглере — Advanced Stocking Input Hatch. Отдельная маленькая подсеть: 2 ME Drive (жидкостные ячейки) + Fluid Storage Bus <b>Insert Only</b>, к ней — беспроводной коннектор от Pending: жидкости из паттерна сразу уходят сюда.</p><p>Основная сеть сюда <b>не подключается</b>: энтанглер запутает всё, что видит. Запас (passive) — класть в эту подсеть порциями (DESIGN.md §1.2a).</p>`},
+  {t:'AE2 · подсеть энтанглера', show:'all', cam:()=>[add3(AE_POS.ent,[0,-1,0]), 28, [.6,.5,.7]], note:()=>`<p>Подсеть энтанглера — без контроллера: <b>Advanced Stocking Input Hatch</b> энтанглера + <b>ME Fluid Interface</b> + 2 ME Drive (жидкостные ячейки). Хетч видит только её.</p><p>Связь с Pending — не кабелем, а деталями на <b>чёрном кабеле Pending</b> (от беспроводного коннектора Pending): <b>Fluid Storage Bus</b> (деталь, Insert Only) лицом в Fluid Interface и <b>Quartz Fiber</b> (деталь) в ME Drive — питание без каналов. Грани с деталями сети не соединяют.</p><p>Как это работает: заказ кладёт в Pending предметы и жидкости. У дисков Pending — только предметные ячейки, поэтому жидкости уходят единственным путём — через storage bus в подсеть, и обратно (Insert Only) не возвращаются.</p><p>Основная сеть сюда <b>не подключается</b>: энтанглер запутает всё, что видит. Запас (passive) — класть в эту подсеть порциями (DESIGN.md §1.2a).</p>`},
   {t:'AE2 · наниты', show:'all', cam:()=>[[-14,1,9], 26, [.45,.55,.75]], note:()=>`<p><b>Наниты</b> (бирюзовая, свой цвет кабеля!): Neutronium ME Controller + адаптер, 2 IO Port с Transposer между ними, ME Drive с ячейкой: фильтр на 10 нанитов BEC, Equal Distribution Card, Types = 10, объём = 307 200 × число Матриц. Crafting Storage + Co-Processor, Energy Anchor.</p><p>P2P <b>Dual</b> Interface (обычный Blocking, не Smart) + Fake Crafting Card, 10 паттернов «нанит → нанит», выход переименован в номер тира («1»…«10»), размер паттерна = нанитов этого тира / число Матриц (30 720 для одной).</p><p>Беспроводной коннектор → <b>двусторонний storage bus на Nanite Containment Bus</b> Матрицы; сверху — storage bus Extract Only к IO Port.</p>`},
   {t:'AE2 · что куда вставить', show:'all', cam:()=>[[-24,1,9], 30, [.3,.6,.75]], note:()=>`<table class="fillt"><tr><th>Где</th><th>Что</th></tr>
 <tr><td>Mainnet · Dual Interface</td><td>паттерны BEC <b>умноженные</b>; Blocking Card + Smart Blocking; ключом в Pending</td></tr>
@@ -796,7 +825,8 @@ const STEPS = [
 <tr><td>Input · ME Interface</td><td>пустой, обычный (не Dual); рядом адаптер</td></tr>
 <tr><td>Input · 2 ME Drive</td><td>20 × Item Digital Singularity</td></tr>
 <tr><td>Input · корпус</td><td>storage bus Bidirectional, приоритет 1000; Item Detector Cover → Redstone I/O</td></tr>
-<tr><td>Энтанглер · 2 ME Drive</td><td>20 × Fluid Digital Singularity; storage bus Insert Only</td></tr>
+<tr><td>Энтанглер · 2 ME Drive</td><td>20 × Fluid Digital Singularity</td></tr>
+<tr><td>Энтанглер · связь с Pending</td><td>на чёрном кабеле Pending: Fluid Storage Bus (Insert Only) лицом в ME Fluid Interface подсети + Quartz Fiber в ME Drive (питание)</td></tr>
 <tr><td>Наниты · ME Drive</td><td>1 × 16384k Item Cell: partition 10 нанитов BEC, Equal Distribution Card, Types 10, Resource Amount 307 200 × Матриц</td></tr>
 <tr><td>Наниты · 2 IO Port</td><td>по 3 × Superluminal; в верхний — пустая ячейка-пустышка (обязательно)</td></tr>
 <tr><td>Наниты · P2P Dual Interface</td><td>Fake Crafting Card, обычный Blocking; 10 паттернов «нанит → нанит», выход переименован «1»…«10», размер 30 720 / Матриц</td></tr>

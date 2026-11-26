@@ -122,7 +122,7 @@ Entangler ──┐                                     ┌── Observation Ar
 | **Pending** | принимает отправленную партию. Рядом стоят несвязанные Dual Interface с **немножёнными** копиями паттернов + адаптеры OC, по ним считается число копий |
 | **Shuttle** | 2 IO Port + конвейеры + Machine Controller: по редстоуну диски переезжают Pending ↔ Input. Изолирует одну партию |
 | **Input** | Advanced Stocking Input Bus в каждом IO Node через беспроводные коннекторы → 4 хаба Input (решено 2026-11-25); Output Bus (ME) узла — белый коннектор в Mainnet |
-| **Entangler** | исходные жидкости из паттерна → Advanced Stocking Hatch Entangler'а (пополнение запаса) |
+| **Entangler** | подсеть без контроллера: Advanced Stocking Input Hatch энтанглера + ME Fluid Interface + 2 ME Drive (20 Fluid Digital Singularity). Связь с Pending — деталями на кабеле Pending: Fluid Storage Bus **Insert Only** лицом в Fluid Interface (storage bus работает только по интерфейсу, не по ME Drive) + Quartz Fiber в ME Drive (питание без каналов). У дисков Pending только предметные ячейки → жидкости заказа уходят в подсеть и не возвращаются |
 | **Nanites** | своя подсеть (свой цвет кабеля): ячейка с фильтром на 10 нанитов + Equal Distribution, двусторонний storage bus на Nanite Containment Bus через беспроводной коннектор, P2P Dual Interface + Fake Crafting Card с паттернами «нанит→нанит» (выход переименован в тир), извлечение — storage bus Extract Only + 2 IO Port + Transposer (вариант A, решено 2026-11-25) |
 
 Выход IO Node → mainnet.
