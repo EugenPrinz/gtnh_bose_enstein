@@ -30,6 +30,8 @@ function F:tick()
   local q = self.queue
   self.queue = {}
   for _, fn in ipairs(q) do fn() end
+  if self.autostart then self:autostart() end
+  if self.jobs then local keep = {} for _, j in ipairs(self.jobs) do if not j() then keep[#keep + 1] = j end end self.jobs = keep end
   self.w:tick()
 end
 
@@ -54,7 +56,7 @@ function F:add(ctype, name, coords, impl, formed)
     getWorkMaxProgress = function() return 0 end,
     getSensorInformation = function() return {"fake " .. name} end,
   }
-  local proxy = {address = addr, type = ctype}
+  local proxy = {address = addr, type = ctype, __st = st}
   for m in pairs(METHODS[ctype]) do
     local fn = impl[m] or base[m]
     proxy[m] = fn or function() return nil end
@@ -86,6 +88,86 @@ function F:api()
     end,
     proxy = function(a) return fake.comps[a] end,
   }
+end
+
+-- ---------- AE2 и остальное оборудование ----------
+-- o = {recipe = модельный рецепт партии, items = {{name, damage, label, size(на копию)}}, fluids = {{name, amount}},
+--      outLabel, nanites = {тир → размер паттерна}}
+function F:ae(o)
+  local w, fake = self.w, self
+  self.input = {}          -- предметы в сети Input
+  self.pulses = 0
+  self.jobs = {}
+  local pat = {inputs = {}, outputs = {{label = o.outLabel or "Product", size = o.recipe.out or 1}}}
+  for _, it in ipairs(o.items) do pat.inputs[#pat.inputs + 1] = {name = it.name, damage = it.damage or 0, label = it.label, size = it.size} end
+  for _, f in ipairs(o.fluids or {}) do pat.inputs[#pat.inputs + 1] = {name = f.name, amount = f.amount} end
+  self.pattern = pat
+  self:add("fluid_interface", nil, nil, {getInterfacePattern = function(slot) return slot == 1 and pat or nil end})
+  self:add("me_interface", nil, nil, {getItemsInNetwork = function()
+    local l = {}
+    for _, it in ipairs(fake.input) do if it.size > 0 then l[#l + 1] = {name = it.name, damage = it.damage, label = it.label, size = it.size} end end
+    return l
+  end})
+  local function craftable(t, size, kind)
+    return {getItemStack = function() return {label = tostring(t), size = size} end,
+      request = function(amount)
+        local job = {left = 3}
+        fake.jobs[#fake.jobs + 1] = function()
+          job.left = job.left - 1
+          if job.left == 0 then
+            local h = w.asm.hatches
+            h[#h + 1] = {kind = kind, count = amount}
+            w.asm:setNanites(h)
+            return true
+          end
+        end
+        return {isDone = function() return job.left <= 0 end, isCanceled = function() return false end, hasFailed = function() return false end}
+      end}
+  end
+  local recipe = require("model.recipe")
+  self:add("me_controller", nil, nil, {getCraftables = function(f)
+    local t = tonumber(f and f.label)
+    local size = t and o.nanites[t]
+    if not size then return {} end
+    return {craftable(t, size, recipe.NANITE_FOR_TIER[t])}
+  end})
+  self:add("redstone", nil, nil, {setOutput = function(tbl) if tbl[0] == 15 then fake.pulses = fake.pulses + 1 end end})
+  -- Transposer: стороны 2 (порт с меткой) и 3 (ячейка отдыхает); ячейка в порт с меткой → наниты вынуты
+  self.cell = 3
+  self:add("transposer", nil, nil, {
+    getInventorySize = function(side) return (side == 2 or side == 3) and 12 or nil end,
+    getStackInSlot = function(side, slot)
+      if side == 2 and slot == 12 then return {label = "метка", size = 1} end
+      if slot == 7 and side == fake.cell then return {label = "cell", size = 1} end
+    end,
+    transferItem = function(from, to, n, fs, ts)
+      if from ~= fake.cell or fs ~= 7 then return 0 end
+      fake.cell = to
+      if to == 2 then fake.extracted = (fake.extracted or 0) + 1; w.asm:setNanites({}) end
+      return 1
+    end})
+  -- узел сам берёт рецепт, если разрешена работа и в Input хватает копий на minParallel
+  self.autostart = function()
+    for _, p in pairs(fake.comps) do
+      if p.type == "bec_io_node" and p.__st.allowed and not p.__node:crafting() then
+        local n, copies = p.__node, math.huge
+        for i, it in ipairs(o.items) do copies = math.min(copies, (fake.input[i] and fake.input[i].size or 0) // it.size) end
+        if copies >= n.minParallel and copies > 0 then
+          local P = n:start(o.recipe, copies)
+          if P then for i, it in ipairs(o.items) do fake.input[i].size = fake.input[i].size - P * it.size end end
+        end
+      end
+    end
+  end
+  return self
+end
+
+-- Положить партию из k копий в Input
+function F:batch(o, k)
+  for i, it in ipairs(o.items) do
+    self.input[i] = self.input[i] or {name = it.name, damage = it.damage or 0, label = it.label, size = 0}
+    self.input[i].size = self.input[i].size + it.size * k
+  end
 end
 
 -- Вся линия по миру w: Поле, затвор, энтанглер, Матрица и узлы
@@ -129,7 +211,7 @@ function F:line(o)
   self:add("gt_machine", "multi.bec.assembler", {20, 10, 0}, {}, formed.array)
   for i, n in ipairs(w.nodes) do
     local c = (o.nodeCoords and o.nodeCoords[i]) or {20 + i, 2, 8}
-    self:add("bec_io_node", "multi.bec.io-node", c, {
+    local px = self:add("bec_io_node", "multi.bec.io-node", c, {
       getState = function() return STATE[n.state] or n.state end,
       getRecipeSteps = function()
         if not n.steps then return nil end
@@ -152,6 +234,7 @@ function F:line(o)
       isMachineActive = function() return n:crafting() end,
       hasWork = function() return n:crafting() end,
     }, formed.node)
+    px.__node = n
   end
   return self
 end

@@ -12,7 +12,8 @@ local branch = type(opts.branch) == "string" and opts.branch or "main"
 local BASE = "https://raw.githubusercontent.com/EugenPrinz/gtnh_bose_enstein/" .. branch .. "/bec/"
 local DEST = "/home/bec/"
 local FILES = {
-  "becctl.lua",
+  "becctl.lua", "main.lua", "line.lua", "ui.lua", "log.lua", "config.lua",
+  "hal/ae.lua", "hal/shuttle.lua", "hal/nanites.lua",
   "hal/gtbase.lua", "hal/node.lua", "hal/diode.lua", "hal/storage.lua", "hal/machine.lua", "hal/probe.lua",
   "model/data.lua", "model/recipe.lua", "model/timing.lua", "model/entangler.lua", "model/strategy.lua",
 }
@@ -55,5 +56,5 @@ end
 if failed > 0 then
   print("не скачано: " .. failed .. " — старые версии этих файлов не тронуты")
 else
-  print("готово: " .. DEST .. " — запуск: cd /home/bec && becctl probe")
+  print("готово: " .. DEST .. " — проверка: cd /home/bec && becctl probe; запуск: main")
 end

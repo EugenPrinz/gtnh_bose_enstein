@@ -17,10 +17,19 @@ local extra = {
     "setParameter", "setSpeedDivisor"},
 }
 
+-- AE2/OC-компоненты, которыми пользуется программа (методы, которые она вызывает; сверено с программой Armisael5,
+-- работающей в игре): копии паттернов, Input, подсеть нанитов, Redstone I/O, Transposer
+extra.fluid_interface = {"getInterfacePattern"}
+extra.me_interface = {"getItemsInNetwork"}
+extra.me_controller = {"getCraftables", "getItemsInNetwork"}
+extra.redstone = {"setOutput", "getInput", "getOutput"}
+extra.transposer = {"getInventorySize", "getStackInSlot", "transferItem"}
+local NOGT = {fluid_interface = true, me_interface = true, me_controller = true, redstone = true, transposer = true}
+
 local M = {}
 for t, l in pairs(extra) do
   local set = {}
-  for _, m in ipairs(common) do set[m] = true end
+  if not NOGT[t] then for _, m in ipairs(common) do set[m] = true end end
   for _, m in ipairs(l) do set[m] = true end
   M[t] = set
 end

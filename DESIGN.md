@@ -149,32 +149,29 @@ Entangler ──┐                                     ┌── Observation Ar
 
 ```
 bec/
-  main.lua            точка входа, автозапуск, цикл
-  config.lua          привязки, бюджеты EU, стратегии
+  main.lua            ✓ точка входа: цикл tick + экран, touch/redstone_changed через event.listen, Q/Ctrl+C — выход
+  config.lua          ✓ значения по умолчанию + /etc/bec/bec.cfg
+  line.lua            ✓ машина состояний §4, view() — снимок для экрана; состояние → /etc/bec/state.cfg
+  ui.lua              ✓ экран (GPU, буфер видеопамяти если есть), кнопки Пауза / Diag / Сброс
+  log.lua             ✓ журнал: 40 строк в памяти + /home/bec.log с ротацией в .old
   becctl.lua          ✓ probe [--fix] [--reset], diag
   install.lua         ✓ установка/обновление с GitHub (Internet Card) в /home/bec
-  hal/                ✓ этап 2 (без ae/shuttle/nanites)
+  hal/                ✓
     gtbase.lua        общие методы GT (работа, энергия, getName/getCoordinates), безопасный call()
     node.lua          bec_io_node: состояние, шаги (index от 1), тиры, конденсат в типах модели, setParallel
     diode.lua         bec_diode: маршрут = слот 1 фиктивный + типы рецепта, check() со следующего тика
     storage.lua       bec_storage: запрет setWorkAllowed(false), напряжённость не ниже объёма
     machine.lua       gt_machine: энтанглер (multi.bec.generator) и Матрица (multi.bec.assembler)
     probe.lua         поиск машин по getName, проверки, раскладка узлов по координатам
-    ae.lua            чтение паттернов, Input subnet, крафты
-    shuttle.lua       redstone ↔ IO Port
-    nanites/*.lua     драйверы подачи нанитов (A/B, §6)
+    ae.lua            копии паттернов (fluid_interface), Input (me_interface), крафт нанитов (me_controller)
+    shuttle.lua       импульс redstone на все стороны → диски Input уезжают в Pending
+    nanites.lua       Transposer между двумя IO Port: ячейка слот 7, метка слот 12 (схема Armisael5)
   model/              ✓ этап 1
     data.lua          генерируется tools/build3d/luadata.py: 19 конденсатов, 77 рецептов с предметными входами
     recipe.lua        шаги (IntDivisionIterator), барьеры тира, конденсат, предел P по питанию, тиры нанитов
     timing.lua        точное время партии по событиям (const/swap, все узлы)
     entangler.lua     порт checkProcessing, produce: «все сразу» / «по длительности»
-    strategy.lua      выбор const/swap, раскладка копий по узлам и волнам, план партии
-  planner.lua         партия → узлы, параллели, проверка бюджета
-  line.lua            машина состояний линии
-  persist.lua         состояние на диск, resume
-  ui.lua              экран
-  log.lua             журнал + ротация
-  diag.lua            проверки здоровья, коды ошибок, `becctl diag` (§4a)
+    strategy.lua      выбор const/swap, раскладка копий по узлам и волнам, план партии, naniteLoad
 sim/                  ✓ потиковый симулятор 1:1: storage, diode, assembler, node, entangler, world
 tests/                ✓ lua5.3 tests/run.lua — model против sim до тика + сценарии
 docs/BUILD.md         схема постройки по слоям
@@ -200,6 +197,13 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 | RUN | слежение за тиром (constant/swap), `getSlowdowns()`, состояние узлов | `slowdowns > 0` → ALARM: это ошибка маршрута |
 | DRAIN | очистить фильтры рецепта, извлечь наниты, убедиться что Input пуст | остатки → HALT, диски не возвращать |
 | RETURN | импульс редстоуна → диски уезжают в Pending | — |
+
+**Реализация (`line.lua`, проверенный порядок Armisael5):** свободные узлы всегда `setWorkAllowed(false)` — иначе
+хватают предметы из Input сами; START: `setParallel(P)` → `true` → ждать `hasWork` → `false` (текущий рецепт
+идёт дальше). Конденсат на всю партию — до ROUTE; напряжённость поднимается до объёма ×`fieldMargin` в PLAN.
+Наниты: перед подачей — извлечь старые (ячейка в IO Port с меткой), заказать `naniteLoad` (тир T + добавка
+старших), ждать крафтов. «Звонок» — `redstone_changed`, но IDLE и так опрашивает Input каждые `poll` с.
+Пауза — не брать новые партии; текущая доводится до конца. Ошибка Lua в шаге → `E-INTERNAL` (FAULT), трасса в журнал.
 
 **Resume после перезагрузки:** узлы с `hasWork` → фильтры восстанавливаются из `getRequiredCondensate()`, переход сразу в RUN. Фаза и партия пишутся на диск при каждом переходе.
 
@@ -286,12 +290,13 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 ## 8. Этапы
 1. ✓ `model/` + `sim/` + тесты (2026-11-25).
 2. `hal/` + `becctl probe/calibrate` + сухой прогон. ✓ HAL машин, `probe`, `diag`, установщик (2026-11-25); осталось: `ae`, `shuttle`, `nanites`, `calibrate`, прогон в игре.
-3. `line.lua` v1: одна партия, constant-стратегия.
-4. swap-стратегия + опережающая подача.
-5. UI, журнал, Discord-вебхук (опц.).
+3. ✓ `line.lua`: партия от Input до возврата, const и swap (тир = максимум нужных), resume, экран, журнал (2026-11-26).
+4. опережающая подача нанитов при swap (сейчас — по факту смены тира).
+5. уведомления — не нужны (решение 2026-11-26).
 6. v2: подача конденсата по ходу крафта.
 
 ## 9. Журнал решений
+- 2026-11-26 — этап 3: автомат линии + экран. Узлы управляются только через `setWorkAllowed` (вкл → `hasWork` → выкл), наниты — через Transposer и метку, возврат — импульс на все стороны; всё как у Armisael5. Уведомлений нет.
 - 2026-11-26 — рецептов BEC в 2.9.1 — **77** (49 в `BECRecipes` вкл. 27 генераторов полей EoH и `runLateRecipes`, 28 Meta Material). Выгрузка v1 брала 28 и без предметов; `tools/build3d/recipes.py` теперь интерпретирует оба Java-файла (циклы, массивы). Блокировка Dual Interface: Blocking Mode + Loose Mode.
 - 2026-11-25 — этап 2 (часть): HAL пяти машин и `becctl probe/diag`; адреса не храним — узнаём по `getName`/координатам; HAL проверяется против `sim/` через фейковый component API с методами из дампа игры.
 - 2026-11-25 — этап 1: модель и симулятор на Lua 5.3. Стратегия swap — тир = максимум нужных тиров (никто не блокируется). P ограничено питанием Матрицы (§1.4).
