@@ -5,8 +5,6 @@
 любые рецепты BEC, любые тиры нанитов, новые рецепты из обновлений без правки кода.
 
 **Статус:** готовы модель и симулятор (этап 1), HAL и `becctl probe/diag` (этап 2), автомат линии с экраном `main` (этап 3).
-Программы управления линией ещё нет.
-
 Установка на сервер OC (нужна Internet Card):
 ```
 wget -f https://raw.githubusercontent.com/EugenPrinz/gtnh_bose_enstein/main/bec/install.lua /home/install-bec.lua

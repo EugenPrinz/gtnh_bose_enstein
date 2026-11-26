@@ -53,6 +53,12 @@ for _, f in ipairs(FILES) do
     print("✗ " .. f .. " — " .. err)
   end
 end
+-- сам установщик тоже обновляется: новые файлы в списке подхватятся при следующем запуске
+local self_body = fetch(BASE .. "install.lua")
+if self_body then
+  local h = io.open("/home/install-bec.lua", "w")
+  if h then h:write(self_body); h:close(); print("✓ install-bec обновлён") end
+end
 if failed > 0 then
   print("не скачано: " .. failed .. " — старые версии этих файлов не тронуты")
 else
