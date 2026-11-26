@@ -112,20 +112,37 @@ end
 -- ---------- наниты: фейковый крафт по паттернам с выходом «номер тира» ----------
 local function ctrl(self) return first(self.c, "me_controller") end
 
--- Все паттерны тира t (варианты Carbon/Glowstone и Silver/Neutronium — все): {{craftable, size}}
+-- Тир по названию выхода паттерна: «4» (переименован, как у Armisael5) или обычное имя «Gold Nanites».
+local KEYS = {{"carbon", 1}, {"glowstone", 1}, {"silver", 2}, {"neutronium", 2}, {"gold", 3}, {"transcendent", 4},
+  {"sixphased", 5}, {"whitedwarf", 6}, {"blackdwarf", 7}, {"universium", 8}, {"eternity", 9}, {"magmatter", 10}}
+function A.tierOfLabel(label)
+  local s = tostring(label or "")
+  local n = math.tointeger(tonumber(s))
+  if n and n >= 1 and n <= 10 then return n end
+  local k = s:lower():gsub("[^%a]", "")
+  if not k:find("nanite", 1, true) then return nil end
+  for _, x in ipairs(KEYS) do if k:find(x[1], 1, true) then return x[2] end end
+end
+
+-- Все паттерны тира t (варианты Carbon/Glowstone и Silver/Neutronium — все): {{craftable, size, label}}.
+-- Читаются все craftables сети разом (фильтр по label не нужен: выход может быть и не переименован).
 function A:naniteCrafts(t, force)
   if self.craft[t] and not force then return self.craft[t] end
   local p = ctrl(self)
   if not p then return nil, "нет me_controller подсети нанитов" end
-  local list, err = G.call(p, "getCraftables", {label = tostring(t)})
+  local list, err = G.call(p, "getCraftables")
   if type(list) ~= "table" then return nil, tostring(err) end
-  local out = {}
+  local by = {}
+  for i = 1, 10 do by[i] = {} end
   for _, cr in ipairs(list) do
-    local st = G.call(cr, "getItemStack") or G.call(cr, "getStack")
-    if type(st) == "table" and (st.size or 0) > 0 then out[#out + 1] = {cr = cr, size = st.size} end
+    local st
+    if type(cr.getStack) == "function" then st = G.call(cr, "getStack") end
+    if type(st) ~= "table" and type(cr.getItemStack) == "function" then st = G.call(cr, "getItemStack") end
+    local tier = type(st) == "table" and A.tierOfLabel(st.label)
+    if tier and (st.size or 0) > 0 then by[tier][#by[tier] + 1] = {cr = cr, size = st.size, label = st.label} end
   end
-  self.craft[t] = out
-  return out
+  for i = 1, 10 do self.craft[i] = by[i] end
+  return self.craft[t]
 end
 
 -- Сколько нанитов каждого тира можно заказать (= размеры паттернов): {тир → N}

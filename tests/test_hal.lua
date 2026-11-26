@@ -159,4 +159,17 @@ S["install.lua ставит все модули bec/"] = function()
   p:close()
 end
 
+S["тир нанитов по названию выхода паттерна"] = function()
+  local A = require("hal.ae")
+  T.eq(A.tierOfLabel("Gold Nanites"), 3)
+  T.eq(A.tierOfLabel("Transcendent Metal Nanites"), 4)
+  T.eq(A.tierOfLabel("Glowstone Nanites"), 1)
+  T.eq(A.tierOfLabel("Neutronium Nanites"), 2)
+  T.eq(A.tierOfLabel("Six-Phased Copper Nanites"), 5)
+  T.eq(A.tierOfLabel("White Dwarf Matter Nanites"), 6)
+  T.eq(A.tierOfLabel("Magmatter Nanites"), 10)
+  T.eq(A.tierOfLabel("4"), 4)
+  T.eq(A.tierOfLabel("Gold Ingot"), nil)
+end
+
 return S

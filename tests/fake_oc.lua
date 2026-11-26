@@ -109,7 +109,8 @@ function F:ae(o)
     return l
   end})
   local function craftable(t, size, kind)
-    return {getItemStack = function() return {label = tostring(t), size = size} end,
+    -- как в игре (OC GTNH): метод getStack, выход паттерна не переименован
+    return {getStack = function() return {label = kind:gsub("(%l)(%u)", "%1 %2") .. " Nanites", size = size} end,
       request = function(amount)
         local job = {left = 3}
         fake.jobs[#fake.jobs + 1] = function()
@@ -125,11 +126,10 @@ function F:ae(o)
       end}
   end
   local recipe = require("model.recipe")
-  self:add("me_controller", nil, nil, {getCraftables = function(f)
-    local t = tonumber(f and f.label)
-    local size = t and o.nanites[t]
-    if not size then return {} end
-    return {craftable(t, size, recipe.NANITE_FOR_TIER[t])}
+  self:add("me_controller", nil, nil, {getCraftables = function()
+    local l = {}
+    for t, size in pairs(o.nanites) do l[#l + 1] = craftable(t, size, recipe.NANITE_FOR_TIER[t]) end
+    return l
   end})
   self:add("redstone", nil, nil, {setOutput = function(tbl) if tbl[0] == 15 then fake.pulses = fake.pulses + 1 end end})
   -- Transposer: стороны 2 (порт с меткой) и 3 (ячейка отдыхает); ячейка в порт с меткой → наниты вынуты.
