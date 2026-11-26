@@ -571,7 +571,9 @@ function FILL0(name, sub, w){
     case 'ME IO Port': {
       if (P) return {rows:[SUPER, IOMODE, ['Направление', 'из сети в ячейку: забирает всю партию из Pending в ячейку'], ['Сеть', 'Pending (касается его коннектора)']]};
       if (I) return {rows:[SUPER, IOMODE, ['Направление', 'из ячейки в сеть: выгружает ячейку в Input'], ['Ячейка', '16384k Item Cell — положить сюда при постройке (для Врат — Artificial Universe cell: предметов больше)'], ['Сеть', 'Input (пурпурный коннектор сверху → хаб Input)']]};
-      if (N) return {rows:[SUPER].concat(w[1] > 0 ? [['Ячейка', 'любая пустая ячейка-пустышка — обязательно (Armisael5: «This is important»)']] : [['Ячейка', 'ячейку с нанитами двигает Transposer']])};
+      if (N) return {rows:[SUPER, ['Режим', 'Move to output when work is done — иначе на пустой шине ячейка застрянет во входе']].concat(w[1] > 0
+        ? [['Направление', 'Transfer data to storage cell (шина Матрицы → ячейка)'], ['Метка', 'пустая ячейка в выходе 8…12: положить 2 ячейки во вход, из выхода 7 забрать одну']]
+        : [['Направление', 'Transfer data to network (ячейка → подсеть нанитов)'], ['Ячейка', 'рабочая 16k+ — во вход, порт переложит в выход 7; дальше её двигает Transposer']])};
       return {rows:[SUPER, IOMODE]};
     }
     case 'ME Drive': {
@@ -613,7 +615,8 @@ function GUI(name, sub, w){
       const sup = Array(3).fill(cell('AEI_CardSuperluminal', '', 'Superluminal Acceleration Card'));
       if (P) return {type:'io', cells:[], cards:sup, dir:'→ в ячейку', btns:['Move to output when cell/network is empty']};
       if (I) return {type:'io', cells:[cell('AEI_Cell16384k', '', '16384k Item Cell (для Врат — Artificial Universe)')], cards:sup, dir:'← в сеть', btns:['Move to output when cell/network is empty']};
-      if (N && w[1] > 0) return {type:'io', cells:[], out:[cell('AEI_Cell16384k', '∅', 'любая пустая ячейка-пустышка — обязательно')], cards:sup, dir:'', btns:[]};
+      if (N && w[1] > 0) return {type:'io', cells:[], out:[null, cell('AEI_Cell16384k', '∅', 'метка: любая пустая ячейка в выходе 8…12 (вход → 2 ячейки, из слота 7 забрать)')], cards:sup, dir:'→ в ячейку', btns:['Move to output when work is done'], note:'извлечение: шина Матрицы → ячейка; метку в выход кладёт сам порт'};
+      if (N) return {type:'io', cells:[], out:[cell('AEI_Cell16384k', '', 'рабочая ячейка (16k+): в вход, порт сам переложит в выход 7')], cards:sup, dir:'← в сеть', btns:['Move to output when work is done'], note:'выгрузка: ячейка → подсеть нанитов'};
       return {type:'io', cells:[], cards:sup, dir:'', btns:[]};
     }
   }

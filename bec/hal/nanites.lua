@@ -1,12 +1,15 @@
 -- Извлечение нанитов из Матрицы (вариант A, как у Armisael5 — проверено в игре): Transposer между двумя IO Port.
--- В выходном слоте 12 одного порта — пустышка-метка («markerSide»), рабочая ячейка лежит в слоте 7 другого.
+-- В выходе 8…12 одного порта — пустышка-метка (порт извлечения), рабочая ячейка — в выходе 7 другого.
+-- В выход руками не положить (AE2: вставка только во вход) — метку кладёт сам порт: 2 ячейки во вход, из 7 забрать.
+-- Оба порта — «Move to output when work is done»: при 3 Superluminal один проход переносит всё, и ячейка выходит
+-- даже с пустой шины (в режиме «when empty» она осталась бы во входе, а вход Transposer не разгружает).
 -- Ячейка в порт с меткой → он вытягивает наниты из шины (storage bus Extract Only) → ячейка обратно → выгрузка в подсеть.
 local G = require("hal.gtbase")
 
 local N = {}
 N.__index = N
 
-N.CELL_SLOT, N.MARKER_SLOT = 7, 12
+N.CELL_SLOT, N.MARKER_FROM, N.MARKER_TO = 7, 8, 12
 
 function N.new(component) return setmetatable({c = component}, N) end
 
@@ -19,7 +22,9 @@ function N:find()
       local size = G.call(p, "getInventorySize", side)
       if type(size) == "number" and size > 0 then
         sides[#sides + 1] = side
-        if G.call(p, "getStackInSlot", side, N.MARKER_SLOT) then marker = side end
+        for slot = N.MARKER_FROM, N.MARKER_TO do
+          if G.call(p, "getStackInSlot", side, slot) then marker = side end
+        end
       end
     end
     if marker then
@@ -28,7 +33,7 @@ function N:find()
       if other then self.t = {p = p, marker = marker, other = other}; return self.t end
     end
   end
-  return nil, "не найден Transposer с меткой в слоте " .. N.MARKER_SLOT .. " IO Port подсети нанитов"
+  return nil, "не найден Transposer с меткой (пустая ячейка в выходе 8–12 порта извлечения)"
 end
 
 -- Перенести ячейку (слот 7) с повторами до timeout; sleep, now — из main

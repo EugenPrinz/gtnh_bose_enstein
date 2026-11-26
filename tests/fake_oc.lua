@@ -137,7 +137,7 @@ function F:ae(o)
   self:add("transposer", nil, nil, {
     getInventorySize = function(side) return (side == 2 or side == 3) and 12 or nil end,
     getStackInSlot = function(side, slot)
-      if side == 2 and slot == 12 then return {label = "метка", size = 1} end
+      if side == 2 and slot == 8 then return {label = "метка", size = 1} end
       if slot == 7 and side == fake.cell then return {label = "cell", size = 1} end
     end,
     transferItem = function(from, to, n, fs, ts)

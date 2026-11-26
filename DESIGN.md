@@ -165,7 +165,7 @@ bec/
     probe.lua         поиск машин по getName, проверки, раскладка узлов по координатам
     ae.lua            копии паттернов (fluid_interface), Input (me_interface), крафт нанитов (me_controller)
     shuttle.lua       импульс redstone на все стороны → диски Input уезжают в Pending
-    nanites.lua       Transposer между двумя IO Port: ячейка слот 7, метка слот 12 (схема Armisael5)
+    nanites.lua       Transposer между двумя IO Port: ячейка — выход 7, метка — выход 8…12 порта извлечения
   model/              ✓ этап 1
     data.lua          генерируется tools/build3d/luadata.py: 19 конденсатов, 77 рецептов с предметными входами
     recipe.lua        шаги (IntDivisionIterator), барьеры тира, конденсат, предел P по питанию, тиры нанитов
@@ -296,6 +296,7 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 6. v2: подача конденсата по ходу крафта.
 
 ## 9. Журнал решений
+- 2026-11-26 — IO Port нанитов (по `TileIOPort` GTNH AE2): в выход руками и Transposer'ом не положить (`canInsertItem` — только вход), из входа не забрать (`canExtractItem` — только выход). Метка — пустая ячейка в выходе 8…12 (порт кладёт её сам: 2 ячейки во вход, из 7 забрать). Режим обоих портов — «Move to output when work is done»: в «when empty» при заполнении ячейка выходит только если что-то перенесла (`matches(EMPTY, FILL) = didWork`), на пустой шине она застряла бы во входе навсегда.
 - 2026-11-26 — этап 3: автомат линии + экран. Узлы управляются только через `setWorkAllowed` (вкл → `hasWork` → выкл), наниты — через Transposer и метку, возврат — импульс на все стороны; всё как у Armisael5. Уведомлений нет.
 - 2026-11-26 — рецептов BEC в 2.9.1 — **77** (49 в `BECRecipes` вкл. 27 генераторов полей EoH и `runLateRecipes`, 28 Meta Material). Выгрузка v1 брала 28 и без предметов; `tools/build3d/recipes.py` теперь интерпретирует оба Java-файла (циклы, массивы). Блокировка Dual Interface: Blocking Mode + Loose Mode.
 - 2026-11-25 — этап 2 (часть): HAL пяти машин и `becctl probe/diag`; адреса не храним — узнаём по `getName`/координатам; HAL проверяется против `sim/` через фейковый component API с методами из дампа игры.

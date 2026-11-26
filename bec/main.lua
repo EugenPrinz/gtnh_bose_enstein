@@ -100,7 +100,9 @@ end
 
 local function draw() pcall(ui.draw, ui, line:view()) end
 
-log:info("старт BEC, узлов в конфиге: " .. tostring(d.layout and #d.layout or "?"))
+local nLayout = 0
+for _ in pairs(d.layout or {}) do nLayout = nLayout + 1 end
+log:info("старт BEC, раскладка узлов: " .. nLayout)
 guard(line.init, line)
 draw()
 
