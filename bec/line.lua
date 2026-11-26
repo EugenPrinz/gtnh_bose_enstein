@@ -358,6 +358,27 @@ function L:p_RETURN()
   self:go("IDLE")
 end
 
+-- ---------- ручное управление Полем ----------
+-- Поднимать — всегда; опускать — только без партии (IDLE/FAULT) и не ниже текущего объёма (иначе распад).
+function L:setField(n)
+  if math.type(n) ~= "integer" or n < 1 then return nil, "напряжённость — целое число ≥ 1" end
+  local st = self.m and self.m.storage
+  if not st then return nil, "Поле не найдено" end
+  local cur = st:strength() or 0
+  if n < cur and self.st.phase ~= "IDLE" and self.st.phase ~= "FAULT" then
+    return nil, "опускать напряжённость можно только без партии"
+  end
+  local ok, e = st:setStrength(n)
+  if not ok then return nil, e end
+  self.log:info(string.format("напряжённость поля %d → %d (вручную)", cur, n))
+  return true
+end
+
+function L:setFieldAuto(on)
+  self.cfg.fieldAuto = on and true or false
+  self.log:info("авторегулировка поля: " .. (on and "вкл" or "выкл"))
+end
+
 -- ---------- снимок для экрана ----------
 function L:view()
   local st, m = self.st, self.m or {}
@@ -373,7 +394,7 @@ function L:view()
   if m.storage then
     local eu, cap = safe(m.storage.eu, m.storage)
     v.field = {stored = safe(m.storage.stored, m.storage) or {}, strength = safe(m.storage.strength, m.storage) or 0,
-      active = safe(m.storage.active, m.storage), eu = eu or 0, cap = cap or 0, need = st.need}
+      active = safe(m.storage.active, m.storage), eu = eu or 0, cap = cap or 0, need = st.need, auto = self.cfg.fieldAuto}
   end
   if m.diode then v.gate = {active = safe(m.diode.active, m.diode), filters = safe(m.diode.filters, m.diode) or {}} end
   if m.array then v.array = {active = safe(m.array.active, m.array)} end

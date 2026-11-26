@@ -1,4 +1,5 @@
 -- main — управление линией BEC с экраном. Запуск: cd /home/bec && main   (выход: Q или Ctrl+C)
+-- Поле: [Изменить] → число с клавиатуры, Enter/Esc; [Авто] — авторегулировка под партию (сохраняется в bec.cfg)
 local dir = (debug.getinfo(1, "S").source:match("^@(.*/)") or "./")
 package.path = dir .. "?.lua;" .. package.path
 for name in pairs(package.loaded) do
@@ -35,7 +36,16 @@ local function write(path, s)
   return true
 end
 
-local cfg = config.load(read, serialization.unserialize)
+local CFG = "/etc/bec/bec.cfg"
+local cfg = config.load(read, serialization.unserialize, CFG)
+-- записать одну настройку в bec.cfg, не трогая остальные
+local function saveCfg(k, v)
+  local t = {}
+  local s = read(CFG)
+  if s then local ok, x = pcall(serialization.unserialize, s); if ok and type(x) == "table" then t = x end end
+  t[k] = v
+  write(CFG, serialization.serialize(t))
+end
 local LAYOUT = "/etc/bec/layout.cfg"
 
 local log = Log.new({
@@ -73,8 +83,9 @@ local function onTouch(_, _, x, y)
   if id then pending[#pending + 1] = id; wake() end
 end
 local function onRedstone() wake() end
-local function onKey(_, _, ch)
-  if ch == string.byte("q") or ch == string.byte("Q") then pending[#pending + 1] = "quit"; wake() end
+local function onKey(_, _, ch, code)
+  pending[#pending + 1] = {key = ch, code = code}
+  wake()
 end
 event.listen("touch", onTouch)
 event.listen("redstone_changed", onRedstone)
@@ -111,7 +122,24 @@ while running do
   local acts = pending
   pending = {}
   for _, a in ipairs(acts) do
-    if a == "quit" then running = false
+    if type(a) == "table" then
+      if ui.input then
+        local r, n = ui:key(a.key, a.code)
+        if r == "apply" then
+          local ok, e = line:setField(n)
+          if ok then ui.input = nil else ui.input.err = tostring(e) end
+        end
+      elseif a.key == string.byte("q") or a.key == string.byte("Q") then running = false
+      end
+    elseif a == "field" then
+      if ui.input then ui.input = nil else
+        local cur = line.m and line.m.storage and line.m.storage:strength()
+        ui:openInput(cur)
+      end
+    elseif a == "fieldauto" then
+      line:setFieldAuto(not cfg.fieldAuto)
+      saveCfg("fieldAuto", cfg.fieldAuto)
+    elseif a == "quit" then running = false
     elseif a == "pause" then
       line.st.paused = not line.st.paused
       log:info(line.st.paused and "пауза: новые партии не берутся" or "пауза снята")

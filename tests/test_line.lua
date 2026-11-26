@@ -166,4 +166,34 @@ S["экран рисуется во всех фазах, кнопки наход
   T.ok(g2.text():find("E%-TEST"))
 end
 
+S["поле вручную: поднять всегда, опустить только без партии и не ниже объёма"] = function()
+  local w, f, d = setup(1, 1000)
+  local line = Line.new(d)
+  line:init()
+  T.ok(line:setField(5000))
+  f:run(2)
+  T.eq(w.storage.strength, 5000)
+  T.ok(line:setField(2000), "в IDLE опускать можно")
+  f:run(2)
+  w.storage:add("ChromaticGlass", 1500)
+  T.ok(not line:setField(1000), "ниже объёма нельзя")
+  T.ok(not line:setField(0))
+  line.st.phase = "RUN"
+  T.ok(not line:setField(1800), "во время партии опускать нельзя")
+  T.ok(line:setField(3000), "поднимать можно всегда")
+  line:setFieldAuto(false)
+  T.eq(d.cfg.fieldAuto, false)
+  -- ввод числа на экране
+  local UI = require("ui")
+  local ui = UI.new(fakeGpu())
+  ui:openInput(3000)
+  ui:key(nil, 14); ui:key(string.byte("5"), 0)
+  local r, n = ui:key(13, 28)
+  T.eq(r, "apply"); T.eq(n, 3005)
+  local g = fakeGpu(); ui.g = g
+  ui:draw(line:view())
+  T.ok(g.text():find("Напряжённость поля, L"))
+  T.ok(ui:key(nil, 1) == "cancel" and ui.input == nil)
+end
+
 return S

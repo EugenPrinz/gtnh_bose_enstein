@@ -79,6 +79,22 @@ function U:button(x, y, label, id, col)
   return x + w + 1
 end
 
+-- Строка ввода числа: open → key(ch, code) → "apply", число | "cancel" | nil
+function U:openInput(start) self.input = {text = start and tostring(start) or ""} end
+function U:key(ch, code)
+  local inp = self.input
+  if not inp then return nil end
+  if code == 28 or code == 156 then -- Enter
+    local n = math.tointeger(tonumber(inp.text))
+    if not n then inp.err = "нужно целое число"; return nil end
+    return "apply", n
+  elseif code == 1 then self.input = nil; return "cancel" -- Esc
+  elseif code == 14 then inp.text = inp.text:sub(1, -2); inp.err = nil -- Backspace
+  elseif ch and ch >= 48 and ch <= 57 and #inp.text < 12 then inp.text = inp.text .. string.char(ch); inp.err = nil
+  end
+  return nil
+end
+
 function U:hit(x, y)
   for _, b in ipairs(self.buttons) do
     if y == b.y and x >= b.x and x < b.x + b.w then return b.id end
@@ -135,6 +151,9 @@ function U:draw(v)
     end
     self:put(fx + 2, y + 3, table.concat(line, "  "), C.dim, C.panel)
     self:put(fx + 2, y + 4, "EU " .. (v.field.cap > 0 and string.format("%d%%", v.field.eu * 100 // v.field.cap) or "—"), C.dim, C.panel)
+    local bx = fx + w3 - 26
+    bx = self:button(bx, y + 4, "Изменить", "field", self.input and C.acc or C.btn)
+    self:button(bx, y + 4, v.field.auto and "Авто: вкл" or "Авто: выкл", "fieldauto", v.field.auto and C.ok or C.btn)
   end
   local gx = 4 + 2 * w3
   self:box(gx, y, W - gx, 6, "Затвор Максвелла", (v.gate and v.gate.active) and C.ok or C.err)
@@ -168,8 +187,15 @@ function U:draw(v)
     self:bar(cx, cy + 1, tw - 4, n.max > 0 and n.cur / n.max or 0, col)
     if n.slow > 0 then self:put(cx + tw - 12, cy, "загр. " .. n.slow, C.err, C.panel) end
   end
-  -- ошибка и журнал
+  -- ошибка, строка ввода и журнал
   y = y + rows * 3 + 3
+  if self.input then
+    self:put(2, y, "Напряжённость поля, L: ", C.acc, C.bg)
+    self:put(25, y, " " .. self.input.text .. "_" .. string.rep(" ", 12 - #self.input.text), C.text, C.btn)
+    self:put(41, y, "Enter — применить, Esc — отмена" .. (self.input.err and ("   ✗ " .. self.input.err) or ""),
+      self.input.err and C.err or C.dim, C.bg)
+    y = y + 2
+  end
   if v.err then
     self:put(2, y, "✗ " .. v.err.code .. ": " .. v.err.msg, C.err, C.bg)
     if v.err.action then self:put(4, y + 1, "→ " .. v.err.action, C.warn, C.bg) end

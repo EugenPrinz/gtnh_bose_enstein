@@ -152,7 +152,7 @@ bec/
   main.lua            ✓ точка входа: цикл tick + экран, touch/redstone_changed через event.listen, Q/Ctrl+C — выход
   config.lua          ✓ значения по умолчанию + /etc/bec/bec.cfg
   line.lua            ✓ машина состояний §4, view() — снимок для экрана; состояние → /etc/bec/state.cfg
-  ui.lua              ✓ экран (GPU, буфер видеопамяти если есть), кнопки Пауза / Diag / Сброс
+  ui.lua              ✓ экран (GPU, буфер видеопамяти если есть), кнопки Пауза / Diag / Сброс, Поле: Изменить / Авто
   log.lua             ✓ журнал: 40 строк в памяти + /home/bec.log с ротацией в .old
   becctl.lua          ✓ probe [--fix] [--reset], diag
   install.lua         ✓ установка/обновление с GitHub (Internet Card) в /home/bec
