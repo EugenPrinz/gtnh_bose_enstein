@@ -119,6 +119,7 @@ function U:draw(v)
     head = head .. " " .. table.concat(t, "→")
   end
   if v.elapsed then head = head .. " · " .. tm(v.elapsed) end
+  if v.act then head = head .. " · … " .. v.act end
   self:put(2, 1, head, v.phase == "FAULT" and C.err or C.acc, C.bg)
   local bx = W - 34
   bx = self:button(bx, 1, v.paused and "Продолжить" or "Пауза", "pause", v.paused and C.warn or C.btn)

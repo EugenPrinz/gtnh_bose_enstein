@@ -297,4 +297,29 @@ S["старая ошибка из файла состояния не висит 
   T.eq(line.st.err, nil)
 end
 
+S["экран: что делает автомат во время долгих шагов, журнал без повторов, конец партии"] = function()
+  local w, f, d = setup(1)
+  f.naniteStore["Transcendent Nanites"] = 0
+  local seen = {}
+  local line = Line.new(d)
+  local sleep = d.sleep
+  d.sleep = function(t) local v = line:view(); if v.act then seen[v.act] = true end; sleep(t) end
+  line:init()
+  f:batch(SENSOR, 1)
+  local filled = false
+  runUntil(line, f, function()
+    if line.st.phase == "WAIT_COND" and not filled then fill(w, 1); filled = true end
+    return line.st.wait ~= nil
+  end, 2000)
+  for _ = 1, 200 do line:tick(); f:run(10) end -- долгое ожидание
+  local n = select(2, logText(d):gsub("E%-TIER", ""))
+  T.ok(n <= 2, "повторы E-TIER в журнале: " .. n)
+  f.naniteStore["Transcendent Nanites"] = 64
+  T.ok(runUntil(line, f, function() return f.pulses > 0 and line.st.phase == "IDLE" end), logText(d))
+  T.ok(seen["извлекаю наниты из Матрицы"] or seen["жду крафт нанитов (CPU подсети)"], "нет статуса долгого шага")
+  T.ok(logText(d):find("готово: Rough Sensor Array ×1 за %d+:%d%d"), logText(d))
+  T.eq(line.st.strategy, nil)
+  T.eq(line:view().act, nil)
+end
+
 return S

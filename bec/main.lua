@@ -57,9 +57,10 @@ local log = Log.new({
   rotate = function(p) filesystem.remove(p .. ".old"); filesystem.rename(p, p .. ".old") end,
 }, cfg.logPath, cfg.logMax)
 
+local REDRAW -- перерисовка экрана во время долгих шагов (назначается ниже)
 local d = {
   component = component, cfg = cfg, log = log,
-  sleep = os.sleep, now = computer.uptime,
+  sleep = function(t) if REDRAW then REDRAW() end os.sleep(t) end, now = computer.uptime,
   save = function(t) write(cfg.statePath, serialization.serialize(t)) end,
   load = function()
     local s = read(cfg.statePath)
@@ -113,6 +114,12 @@ local function guard(f, ...)
 end
 
 local function draw() pcall(ui.draw, ui, line:view()) end
+-- долгие шаги автомата (перенос ячейки, крафт нанитов) спят через d.sleep — экран обновляется и в это время
+local lastDraw = 0
+REDRAW = function()
+  local t = computer.uptime()
+  if t - lastDraw >= 0.5 then lastDraw = t; draw() end
+end
 
 local nLayout = 0
 for _ in pairs(d.layout or {}) do nLayout = nLayout + 1 end

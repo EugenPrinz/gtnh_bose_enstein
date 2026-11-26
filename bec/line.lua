@@ -111,7 +111,12 @@ end
 function L:tick()
   local ph = self.st.phase
   local f = self["p_" .. ph]
-  if f then return f(self) end
+  self.act = nil
+  if f then
+    local r = f(self)
+    self.act = nil
+    return r
+  end
 end
 
 function L:p_FAULT() end
@@ -262,8 +267,12 @@ function L:afterStart()
 end
 
 -- Сменить тир Матрицы на T: вынуть всё, заказать T (+ старшие)
+-- Что автомат делает внутри долгого шага — для экрана (main перерисовывает его во время ожиданий)
+function L:activity(msg) self.act = msg end
+
 -- Ждать задания крафта нанитов не дольше naniteTimeout: "done" | "wait" | nil, причина
 function L:waitJobs(jobs)
+  self:activity("жду крафт нанитов (CPU подсети)")
   local t0 = self.d.now()
   while true do
     local done = true
@@ -303,6 +312,7 @@ function L:supply(T)
   end
   self.pending = nil
   if self.st.provided or self.st.unknownNanites then
+    self:activity("извлекаю наниты из Матрицы")
     local ok, e = self.nan:extract(self.d.sleep, self.d.now, self.cfg.cellMoveTimeout)
     if not ok then return nil, "извлечение: " .. e end
     self.st.provided, self.st.unknownNanites, self.st.N = nil, nil, nil
@@ -318,6 +328,7 @@ function L:supply(T)
       return nil, e .. (why[T] and (" (" .. why[T] .. ")") or " (в подсети нанитов нет паттерна для этого тира)")
     end
   end
+  self:activity("заказ нанитов тира " .. T)
   local jobs = {}
   for _, o in ipairs(load.order) do
     local j, err = self.ae:requestNanites(o[1], o[2])
@@ -356,12 +367,14 @@ function L:p_RUN()
     local ok, e = self:supply(T)
     if ok then
       self.log:info(string.format("наниты: тир %d, %d шт.", T, self.st.N))
-      self.st.wait, self.nextSupply = nil, nil
+      self.st.wait, self.nextSupply, self.waitSeen = nil, nil, nil
     else
       self.nextSupply = self.d.now() + 5
       self.st.wait = {code = "E-TIER", msg = "жду нанитов тира " .. T .. ": " .. e}
-      if self.lastWait ~= e then
-        self.lastWait = e
+      -- в журнал — каждая причина один раз за ожидание; текущая всегда видна в жёлтой строке
+      self.waitSeen = self.waitSeen or {}
+      if not self.waitSeen[e] then
+        self.waitSeen[e] = true
         self.log:warn("наниты тира " .. T .. ": " .. e .. " — жду, продолжу сам", "E-TIER")
       end
     end
@@ -405,8 +418,10 @@ function L:p_RETURN()
   local ok, e = self.sh:pulse(self.d.sleep, self.cfg.pulse)
   if not ok then return self:fault("E-SHUTTLE", e, "проверить Redstone I/O челнока") end
   local b = self.st.batch or {}
-  self.log:info(string.format("готово: %s ×%s за %d с", tostring(b.name), tostring(b.copies), math.floor(self.d.now() - (self.st.t0 or self.d.now()))))
+  local took = self.st.t0 and string.format(" за %d:%02d", (self.d.now() - self.st.t0) // 60, math.floor(self.d.now() - self.st.t0) % 60) or " (начало партии — до перезапуска)"
+  self.log:info(string.format("готово: %s ×%s%s", tostring(b.name), tostring(b.copies), took))
   self.st.batch, self.st.assign, self.st.need, self.st.route, self.st.steps = nil, nil, nil, nil, nil
+  self.st.strategy, self.st.eta, self.st.maxTier, self.st.t0, self.st.wait = nil, nil, nil, nil, nil
   self:go("IDLE")
 end
 
@@ -435,7 +450,7 @@ end
 function L:view()
   local st, m = self.st, self.m or {}
   local v = {phase = st.phase, phaseRu = L.RU[st.phase] or st.phase, batch = st.batch, strategy = st.strategy,
-    tier = st.provided, N = st.N, load = st.load, steps = st.steps, eta = st.eta, paused = st.paused, err = st.err, wait = st.wait,
+    tier = st.provided, N = st.N, load = st.load, steps = st.steps, eta = st.eta, paused = st.paused, err = st.err, wait = st.wait, act = self.act,
     elapsed = st.t0 and (self.d.now() - st.t0) or nil, route = st.route, log = self.log.lines, nodes = {}}
   local function safe(f, ...) local ok, a, b, c = pcall(f, ...); if ok then return a, b, c end end
   if m.entangler then
