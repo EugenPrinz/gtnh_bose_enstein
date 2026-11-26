@@ -10,7 +10,7 @@
 Установка на сервер OC (нужна Internet Card):
 ```
 wget -f https://raw.githubusercontent.com/EugenPrinz/gtnh_bose_enstein/main/bec/install.lua /home/install-bec.lua
-install-bec
+install-bec            # и для обновления — то же самое
 cd /home/bec && becctl probe
 ```
 
