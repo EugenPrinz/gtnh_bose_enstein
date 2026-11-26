@@ -260,6 +260,22 @@ function L:afterStart()
 end
 
 -- Сменить тир Матрицы на T: вынуть всё, заказать T (+ старшие)
+-- Ждать задания крафта нанитов не дольше naniteTimeout: "done" | "wait" | nil, причина
+function L:waitJobs(jobs)
+  local t0 = self.d.now()
+  while true do
+    local done = true
+    for _, j in ipairs(jobs) do
+      local s, why = AE.jobState(j)
+      if s == "fail" then return nil, "крафт нанитов: " .. why end
+      if s == "wait" then done = false end
+    end
+    if done then return "done" end
+    if self.d.now() - t0 > self.cfg.naniteTimeout then return "wait" end
+    self.d.sleep(0.1)
+  end
+end
+
 function L:supply(T)
   -- Матрица уже даёт тир T (после перезапуска, ручной подачи, прошлого заказа) — ничего не трогаем
   for _, a in ipairs(self.st.assign or {}) do
@@ -267,10 +283,23 @@ function L:supply(T)
     local pt, N = n and n:providedTier(), n and n:nanites() or 0
     if pt == T and N > 0 then
       self.st.provided, self.st.N, self.st.unknownNanites = T, N, nil
+      self.pending = nil
       self:save()
       return true
     end
   end
+  -- прошлый заказ ещё в CPU: не заказывать повторно, только ждать
+  if self.pending and self.pending.T == T then
+    local r, e = self:waitJobs(self.pending.jobs)
+    if r == "wait" then return nil, "крафт нанитов ещё идёт (CPU подсети нанитов): Dual Interface не может отдать их в шину?" end
+    local load = self.pending.load
+    self.pending = nil
+    if not r then return nil, e end
+    self.st.provided, self.st.N, self.st.load = T, load.N, load.order
+    self:save()
+    return true
+  end
+  self.pending = nil
   if self.st.provided or self.st.unknownNanites then
     local ok, e = self.nan:extract(self.d.sleep, self.d.now, self.cfg.cellMoveTimeout)
     if not ok then return nil, "извлечение: " .. e end
@@ -293,18 +322,12 @@ function L:supply(T)
     if not j then return nil, err end
     for _, x in ipairs(j) do jobs[#jobs + 1] = x end
   end
-  local t0 = self.d.now()
-  while true do
-    local done = true
-    for _, j in ipairs(jobs) do
-      local s, why = AE.jobState(j)
-      if s == "fail" then return nil, "крафт нанитов: " .. why end
-      if s == "wait" then done = false end
-    end
-    if done then break end
-    if self.d.now() - t0 > self.cfg.naniteTimeout then return nil, "крафт нанитов не завершился за " .. self.cfg.naniteTimeout .. " с" end
-    self.d.sleep(0.1)
+  local r, e2 = self:waitJobs(jobs)
+  if r == "wait" then
+    self.pending = {T = T, jobs = jobs, load = load}
+    return nil, "крафт нанитов не завершился за " .. self.cfg.naniteTimeout .. " с — жду дальше"
   end
+  if not r then return nil, e2 end
   self.st.provided, self.st.N, self.st.load = T, load.N, load.order
   self:save()
   return true
@@ -326,18 +349,22 @@ function L:p_RUN()
       if rt and (not T or rt > T) then T = rt end
     end
   end
-  if T and T ~= self.st.provided then
+  -- нет нанитов — не ошибка: ждём с предупреждением, пробуем раз в 5 с, продолжаем сами, когда появятся
+  if T and T ~= self.st.provided and self.d.now() >= (self.nextSupply or 0) then
     local ok, e = self:supply(T)
     if ok then
       self.log:info(string.format("наниты: тир %d, %d шт.", T, self.st.N))
-      self.st.swapFail = nil
+      self.st.wait, self.nextSupply = nil, nil
     else
-      self.st.swapFail = self.st.swapFail or self.d.now()
-      self:warnOnce("swap" .. T, "E-TIER", "наниты тира " .. T .. ": " .. e)
-      if self.d.now() - self.st.swapFail > 30 then
-        return self:fault("E-TIER", "наниты тира " .. T .. " не поданы 30 с: " .. e, "проверить подсеть нанитов и паттерны «" .. T .. "»")
+      self.nextSupply = self.d.now() + 5
+      self.st.wait = {code = "E-TIER", msg = "жду нанитов тира " .. T .. ": " .. e}
+      if self.lastWait ~= e then
+        self.lastWait = e
+        self.log:warn("наниты тира " .. T .. ": " .. e .. " — жду, продолжу сам", "E-TIER")
       end
     end
+  elseif T == self.st.provided then
+    self.st.wait = nil
   end
   -- здоровье
   for _, a in ipairs(active) do
@@ -406,7 +433,7 @@ end
 function L:view()
   local st, m = self.st, self.m or {}
   local v = {phase = st.phase, phaseRu = L.RU[st.phase] or st.phase, batch = st.batch, strategy = st.strategy,
-    tier = st.provided, N = st.N, load = st.load, steps = st.steps, eta = st.eta, paused = st.paused, err = st.err,
+    tier = st.provided, N = st.N, load = st.load, steps = st.steps, eta = st.eta, paused = st.paused, err = st.err, wait = st.wait,
     elapsed = st.t0 and (self.d.now() - st.t0) or nil, route = st.route, log = self.log.lines, nodes = {}}
   local function safe(f, ...) local ok, a, b, c = pcall(f, ...); if ok then return a, b, c end end
   if m.entangler then

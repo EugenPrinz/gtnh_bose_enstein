@@ -18,7 +18,7 @@ local SENSOR = {
            {name = "gregtech:gt.metaitem.01", damage = 1, label = "Shijima Bolt", size = 16}},
   fluids = {{name = "molten.chromaticglass", amount = 1152}, {name = "molten.infinity", amount = 576},
             {name = "molten.transcendentmetal", amount = 288}},
-  nanites = {[1] = 30720, [4] = 64, [10] = 30720},
+  nanites = {[1] = 30720, [2] = 30720, [4] = 64, [10] = 30720},
 }
 
 local function setup(nodes, field, pat)
@@ -58,6 +58,7 @@ end
 
 S["партия ×4 на 2 узлах: конденсат, маршрут, наниты, сборка, возврат"] = function()
   local w, f, d = setup(2)
+  d.cfg.naniteFill = true -- несколько шин нанитов: добавка старших тиров
   local line = Line.new(d)
   T.ok(line:init(), logText(d))
   T.eq(line.st.phase, "IDLE")
@@ -224,7 +225,7 @@ S["копия без жидкостей и чужие предметы — E-BAT
   T.ok(line.st.err.msg:find("нет жидкостей"), line.st.err.msg)
 end
 
-S["паттерн нанитов есть, запаса нет — E-TIER с причиной"] = function()
+S["нет нанитов — не ошибка: ждёт с предупреждением и продолжает сам"] = function()
   local w, f, d = setup(1)
   f.naniteStore["Transcendent Nanites"] = 0
   local line = Line.new(d)
@@ -233,10 +234,17 @@ S["паттерн нанитов есть, запаса нет — E-TIER с п�
   local filled = false
   runUntil(line, f, function()
     if line.st.phase == "WAIT_COND" and not filled then fill(w, 1); filled = true end
-    return line.st.phase == "FAULT"
+    return line.st.wait ~= nil
   end, 2000)
-  T.eq(line.st.phase, "FAULT")
-  T.ok(logText(d):find("тир 4: в подсети 0, паттерн на 64"), logText(d))
+  T.ok(line.st.wait and line.st.wait.msg:find("тир 4: в подсети 0, паттерн на 64"), logText(d))
+  for _ = 1, 100 do line:tick(); f:run(10) end -- минута ожидания: не FAULT
+  T.eq(line.st.phase, "RUN")
+  local g = fakeGpu(); require("ui").new(g):draw(line:view())
+  T.ok(g.text():find("жду нанитов тира 4"))
+  f.naniteStore["Transcendent Nanites"] = 64 -- наниты сделали
+  T.ok(runUntil(line, f, function() return f.pulses > 0 and line.st.phase == "IDLE" end), logText(d))
+  T.eq(w.nodes[1].completed, 1)
+  T.eq(line.st.wait, nil)
 end
 
 S["после перезапуска наниты уже в Матрице — не извлекать и не заказывать заново"] = function()

@@ -9,7 +9,8 @@ M.DEFAULTS = {
   cellMoveTimeout = 2,      -- с, перенос ячейки Transposer'ом
   pulse = 0.2,              -- с, импульс возврата ячейки челнока
   swapTicks = 60,           -- тиков, оценка паузы на смену нанитов (для выбора const/swap)
-  naniteFill = true,        -- добавлять старшие тиры к количеству нанитов (strategy.naniteLoad)
+  naniteFill = false,       -- добавлять старшие тиры к количеству: только при нескольких Nanite Containment Bus
+                            -- (шина держит один вид нанитов — второй не войдёт, Dual Interface застрянет)
   fieldAuto = true,         -- поднимать напряжённость поля под партию
   fieldMargin = 1.1,        -- запас напряжённости над объёмом партии
   dummy = "water",          -- фиктивный фильтр затвора (слот 1)

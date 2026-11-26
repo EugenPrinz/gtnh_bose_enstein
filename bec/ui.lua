@@ -230,6 +230,10 @@ function U:draw(v)
       self.input.err and C.err or C.dim, C.bg)
     y = y + 2
   end
+  if v.wait and not v.err then
+    self:put(2, y, "⏳ " .. v.wait.code .. ": " .. v.wait.msg, C.warn, C.bg)
+    y = y + 2
+  end
   if v.err then
     self:put(2, y, "✗ " .. v.err.code .. ": " .. v.err.msg, C.err, C.bg)
     if v.err.action then self:put(4, y + 1, "→ " .. v.err.action, C.warn, C.bg) end
