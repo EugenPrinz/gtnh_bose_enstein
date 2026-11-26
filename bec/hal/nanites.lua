@@ -13,27 +13,41 @@ N.CELL_SLOT, N.MARKER_FROM, N.MARKER_TO = 7, 8, 12
 
 function N.new(component) return setmetatable({c = component}, N) end
 
--- Найти Transposer с меткой; запоминает {p, marker, other}
+-- Найти Transposer с меткой; запоминает {p, marker, other}. Transposer может касаться и посторонних
+-- инвентарей: второй порт — сторона с ячейкой в слоте 7, иначе инвентарь того же размера, что порт с меткой.
 function N:find()
+  local seen = {}
   for addr in self.c.list("transposer", true) do
     local p = self.c.proxy(addr)
-    local sides, marker = {}, nil
+    local inv, marker = {}, nil
     for side = 0, 5 do
       local size = G.call(p, "getInventorySize", side)
       if type(size) == "number" and size > 0 then
-        sides[#sides + 1] = side
-        for slot = N.MARKER_FROM, N.MARKER_TO do
-          if G.call(p, "getStackInSlot", side, slot) then marker = side end
+        inv[side] = size
+        if size >= N.MARKER_TO then
+          for slot = N.MARKER_FROM, N.MARKER_TO do
+            if G.call(p, "getStackInSlot", side, slot) then marker = side end
+          end
         end
       end
     end
+    local list = {}
+    for side, size in pairs(inv) do list[#list + 1] = side .. ":" .. size end
+    seen[#seen + 1] = addr:sub(1, 8) .. " [" .. table.concat(list, " ") .. "]"
     if marker then
       local other
-      for _, s in ipairs(sides) do if s ~= marker then other = s end end
+      for side in pairs(inv) do
+        if side ~= marker and G.call(p, "getStackInSlot", side, N.CELL_SLOT) then other = side end
+      end
+      if not other then
+        for side, size in pairs(inv) do if side ~= marker and size == inv[marker] then other = side end end
+      end
       if other then self.t = {p = p, marker = marker, other = other}; return self.t end
+      return nil, "у Transposer " .. addr:sub(1, 8) .. " есть порт с меткой (сторона " .. marker .. "), второго IO Port нет"
     end
   end
-  return nil, "не найден Transposer с меткой (пустая ячейка в выходе 8–12 порта извлечения)"
+  if #seen == 0 then return nil, "нет компонента transposer" end
+  return nil, "не найден Transposer с меткой (пустая ячейка в выходе 8–12 порта извлечения); видно: " .. table.concat(seen, ", ")
 end
 
 -- Перенести ячейку (слот 7) с повторами до timeout; sleep, now — из main
@@ -61,7 +75,8 @@ function N:recover(sleep, now, timeout)
   local w = self:where()
   if w == "rest" then return true end
   if w == "marker" then return self:move(self.t.marker, self.t.other, sleep, now, timeout) end
-  return nil, "нет рабочей ячейки ни в одном IO Port подсети нанитов"
+  return nil, string.format("нет рабочей ячейки в выходе %d ни одного IO Port (метка — сторона %d, выгрузка — сторона %d)",
+    N.CELL_SLOT, self.t.marker, self.t.other)
 end
 
 -- Вытянуть все наниты из Матрицы в подсеть

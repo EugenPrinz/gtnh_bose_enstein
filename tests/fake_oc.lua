@@ -132,10 +132,11 @@ function F:ae(o)
     return {craftable(t, size, recipe.NANITE_FOR_TIER[t])}
   end})
   self:add("redstone", nil, nil, {setOutput = function(tbl) if tbl[0] == 15 then fake.pulses = fake.pulses + 1 end end})
-  -- Transposer: стороны 2 (порт с меткой) и 3 (ячейка отдыхает); ячейка в порт с меткой → наниты вынуты
+  -- Transposer: стороны 2 (порт с меткой) и 3 (ячейка отдыхает); ячейка в порт с меткой → наниты вынуты.
+  -- Сторона 4 — посторонний инвентарь (как в игре: Transposer касается ещё какого-то блока)
   self.cell = 3
   self:add("transposer", nil, nil, {
-    getInventorySize = function(side) return (side == 2 or side == 3) and 12 or nil end,
+    getInventorySize = function(side) return (side == 2 or side == 3) and 12 or side == 4 and 27 or nil end,
     getStackInSlot = function(side, slot)
       if side == 2 and slot == 8 then return {label = "метка", size = 1} end
       if slot == 7 and side == fake.cell then return {label = "cell", size = 1} end
