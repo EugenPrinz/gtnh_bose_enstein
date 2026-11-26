@@ -14,12 +14,15 @@ L = ['-- Сгенерировано tools/build3d/luadata.py из GT5U 5.09.54.2
      'M.condensates = {']
 for k, v in ct.items():
     L.append(f'  {k} = {{id = {lstr(v["id"])}, unit = {v["unit"]}, dur = {v["dur"]}, eut = {v["eut"]}}},')
-L += ['}', '', '-- рецепты IO Node: tiers — тиры нанитов по шагам (1..10), cond — L конденсата на 1 параллель',
+L += ['}', '', '-- рецепты IO Node: tiers — тиры нанитов по шагам (1..10), cond — L конденсата на 1 параллель,',
+      '-- items — предметные входы {имя, количество} на 1 параллель, out/outItem — выход',
       'M.recipes = {']
 for r in rs:
     cond = ', '.join(f'{k} = {v}' for k, v in r['cond'].items())
     tiers = ', '.join(str(t) for t in r['tiers'])
-    L.append(f'  {{name = {lstr(r["name"])}, tiers = {{{tiers}}}, cond = {{{cond}}}, dur = {r["dur"]}, eut = {r["eut"]}, tier = {lstr(r["tier"])}, out = {r["out"]}}},')
+    items = ', '.join(f'{{{lstr(i["n"])}, {i["c"]}}}' for i in r.get('items', []))
+    L.append(f'  {{name = {lstr(r["name"])}, tiers = {{{tiers}}}, cond = {{{cond}}}, dur = {r["dur"]}, eut = {r["eut"]}, tier = {lstr(r["tier"])}, out = {r["out"]},')
+    L.append(f'    outItem = {lstr(r.get("outItem", r["name"]))}, items = {{{items}}}}},')
 L += ['}', '', 'return M', '']
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 open(OUT, 'w', encoding='utf-8').write('\n'.join(L))

@@ -52,11 +52,12 @@ S["конденсат на партию"] = function()
   T.eq(c.TranscendentMetal, 864)
 end
 
-S["данные: 19 конденсатов, 28 рецептов, тиры 1..10"] = function()
+S["данные: 19 конденсатов, 77 рецептов, тиры 1..10, предметные входы"] = function()
   local n = 0
   for _ in pairs(recipe.condensates) do n = n + 1 end
   T.eq(n, 19)
-  T.eq(#recipe.all, 28)
+  T.eq(#recipe.all, 77)
+  for _, r in ipairs(recipe.all) do T.ok(#r.items > 0, r.name .. ": нет предметных входов") end
   for _, r in ipairs(recipe.all) do
     for _, t in ipairs(r.tiers) do T.ok(t >= 1 and t <= 10, r.name) end
     for c in pairs(r.cond) do T.ok(recipe.condensates[c], r.name .. ": нет типа " .. c) end

@@ -8,7 +8,7 @@
 3. `python3 specials.py` — контроллеры, шлюзы конденсата, люки LoS и выбранные места шлюзов (энергия, шина нанитов,
    входы/выходы узла) → `specials.json`. Сторона шлюза — открытая грань по лучу до края структуры.
 4. `python3 condensates.py` — `CondensateType.java` → `condensates.json` (единица, длительность, EU/t энтанглера; в 2.9.1 — 19 типов).
-5. `python3 recipes.py` — `BECRecipes.java` + правила `BECMetaMaterialRecipes.java` → `recipes_all.json` (28 рецептов).
+5. `python3 recipes.py` — интерпретирует подмножество Java в `BECRecipes.java` (`run` + `runLateRecipes`) и `BECMetaMaterialRecipes.java` (циклы по тирам) → `recipes_all.json`: 77 рецептов с предметными входами, конденсатом, тирами нанитов, длительностью и EU/t. `condensates.py` добавляет имя исходной жидкости (`src`).
 6. `python3 luadata.py` — `condensates.json` + `recipes_all.json` → `../../bec/model/data.lua` (данные модели).
 7. `python3 build.py` — встраивает структуры, текстуры (`tex/*.png` + `.mcmeta`) в `template.html`
    → `../../docs/build.html` (путь можно задать через `OUT=`).
