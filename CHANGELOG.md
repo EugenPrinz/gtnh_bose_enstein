@@ -2,6 +2,12 @@
 
 ## Не выпущено
 
+### 2026-11-26 — наниты одного тира и «добавка»
+- `model/strategy.naniteLoad(T, stock, fill)`: тир T обязателен, старшие тиры добавляют количество до 30 720,
+  младшие — никогда (по `MTEBECAssembler`: тир — младший непустой, количество — сумма всех шин). 2 теста, 50 ✓.
+- Варианты тира (Carbon/Glowstone, Silver/Neutronium): оба паттерна с одним номером, программа заказывает все
+  craftables с этим именем. DESIGN §2.1, §5; 3D: partition до 12 видов, паттерны на каждый вид.
+
 ### 2026-11-26 — компоненты AE2 из игры
 - По `components` в игре: копии Dual Interface — `fluid_interface` (не `me_interface`), Input — единственный
   `me_interface`; лишние `aemultipart`/`me_storagebus` от адаптеров у кабелей с деталями. DESIGN §1.6, карточки 3D.

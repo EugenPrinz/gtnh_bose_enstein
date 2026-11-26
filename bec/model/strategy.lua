@@ -5,6 +5,27 @@ local ent = require("model.entangler")
 
 local M = {}
 
+-- Какие наниты заказать, чтобы Матрица дала тир T и как можно больше нанитов (MTEBECAssembler):
+-- тир Матрицы — самый младший непустой, количество — сумма ВСЕХ непустых шин (≤ 30 720).
+-- Поэтому: тир T обязателен, тиры выше T — «добавка» к количеству (по возрастанию), тиры ниже T — никогда.
+-- stock: тир → сколько нанитов этого тира в подсети (варианты одного тира — Carbon/Glowstone, Silver/Neutronium —
+-- уже сложены: у них общий номер паттерна). fill = false — без добавки, только тир T.
+-- Возвращает {order = {{tier, count}, ...}, N} или nil, причина.
+function M.naniteLoad(T, stock, fill)
+  local have = stock[T] or 0
+  if have < 1 then return nil, "нет нанитов тира " .. T end
+  local cap = recipe.MAX_NANITES
+  local order, N = {{T, math.min(have, cap)}}, math.min(have, cap)
+  if fill ~= false then
+    for t = T + 1, 10 do
+      if N >= cap then break end
+      local c = math.min(stock[t] or 0, cap - N)
+      if c > 0 then order[#order + 1] = {t, c}; N = N + c end
+    end
+  end
+  return {order = order, N = N}
+end
+
 -- Стратегия нанитов: const или swap — что быстрее (при равенстве const: меньше движений нанитов)
 function M.assembly(r, Ps, N, swapTicks)
   local c = timing.line({recipe = r, Ps = Ps, N = N, strategy = "const"})

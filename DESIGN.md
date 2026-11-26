@@ -124,7 +124,7 @@ Entangler ──┐                                     ┌── Observation Ar
 | **Shuttle** | нижний IO Port в Pending («из сети в ячейку»), верхний — в Input через пурпурный коннектор к хабу Input («из ячейки в сеть»); ячейка 16384k ходит по кругу через 2 корпуса: «вперёд» (над IO Port Pending: конвейер снизу — Import, сбоку к IO Port Input — Export; без сигнала) и «возврат» (под IO Port Input: конвейер сверху — Import, сбоку к IO Port Pending — Export; Machine Controller cover лицом в Redstone I/O, Conditional — только по импульсу). Изолирует одну партию. **«Звонок»**: отдельный корпус GT с Item Detector cover → Redstone I/O; в него смотрит Storage Bus Input (деталь на кабеле, Bidirectional, приоритет 1000) — первые выгруженные предметы ложатся туда, детектор будит программу |
 | **Input** | Advanced Stocking Input Bus в каждом IO Node через беспроводные коннекторы → 4 хаба Input (решено 2026-11-25); Output Bus (ME) узла — белый коннектор в Mainnet |
 | **Entangler** | подсеть без контроллера: Advanced Stocking Input Hatch энтанглера + ME Fluid Interface + 2 ME Drive (20 Fluid Digital Singularity). Связь с Pending — деталями на кабеле Pending: Fluid Storage Bus **Insert Only** лицом в Fluid Interface (storage bus работает только по интерфейсу, не по ME Drive) + Quartz Fiber в ME Drive (питание без каналов). У дисков Pending только предметные ячейки → жидкости заказа уходят в подсеть и не возвращаются |
-| **Nanites** | своя подсеть (свой цвет кабеля): ячейка с фильтром на 10 нанитов + Equal Distribution, двусторонний storage bus на Nanite Containment Bus через беспроводной коннектор, P2P Dual Interface + Fake Crafting Card с паттернами «нанит→нанит» (выход переименован в тир), извлечение — storage bus Extract Only + 2 IO Port + Transposer (вариант A, решено 2026-11-25) |
+| **Nanites** | своя подсеть (свой цвет кабеля): ячейка с фильтром на все виды нанитов (до 12, вкл. Glowstone и Neutronium) + Equal Distribution, двусторонний storage bus на Nanite Containment Bus через беспроводной коннектор, P2P Dual Interface + Fake Crafting Card с паттернами «нанит→нанит» (выход переименован в тир), извлечение — storage bus Extract Only + 2 IO Port + Transposer (вариант A, решено 2026-11-25) |
 
 Выход IO Node → mainnet.
 
@@ -248,6 +248,10 @@ IDLE ─(redstone: диски в Input)─▶ IDENTIFY ─▶ PLAN ─▶ WAIT_C
 ---
 
 ## 5. Выбор стратегии нанитов
+
+**Загрузка нанитов (проверено по `MTEBECAssembler.updateNaniteInfoIfDirty`):** тир Матрицы — самый младший по ordinal непустой шины (Carbon < Glowstone < Silver < Neutronium < Gold < … < MagMatter), количество — сумма **всех** непустых шин любых тиров, ≤ 30 720. Отсюда правило `strategy.naniteLoad(T, stock)`: тир T обязателен, тиры выше T — добавка к количеству по возрастанию до 30 720 (конфиг `nanites.fill`, по умолчанию вкл.), тиры ниже T — никогда.
+- Варианты одного тира (Carbon/Glowstone = 1, Silver/Neutronium = 2): у обоих паттернов выход переименован в один номер. Программа берёт **все** craftables с этим именем (`me_controller.getCraftables{label=…}`), а не первый, как у Armisael5; AE различает их как разные предметы.
+
 
 Время считает `bec/model/timing.lua` — точно, до тика, для всех узлов сразу (наниты у Матрицы общие):
 - **const** — весь рецепт тир T_max рецепта. Ниже-тировые шаги идут в 2^Δ медленнее, замен нет.
