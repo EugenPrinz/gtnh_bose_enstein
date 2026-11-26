@@ -129,7 +129,7 @@ while running do
           local ok, e = line:setField(n)
           if ok then ui.input = nil else ui.input.err = tostring(e) end
         end
-      elseif a.key == string.byte("q") or a.key == string.byte("Q") then running = false
+      elseif a.code == 16 or a.key == string.byte("q") or a.key == string.byte("Q") then running = false -- клавиша Q в любой раскладке
       end
     elseif a == "field" then
       if ui.input then ui.input = nil else
