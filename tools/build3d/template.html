@@ -493,8 +493,8 @@ const AEFLOW = [
   ['fluids', 'Pending → подсеть энтанглера: исходные жидкости (беспроводной коннектор, Insert Only)', '#9aa0aa'],
   ['shuttle','Pending → Input: ячейка с партией едет через IO Port и конвейеры (Redstone I/O)', '#d24fd8'],
   ['items',  'Input → узлы: Advanced Stocking Input Bus через беспроводные хабы', '#d24fd8'],
-  ['nanIn',  'Наниты → шина Матрицы: фейковый крафт «нанит→нанит» на P2P Dual Interface', '#3fd0d0'],
-  ['nanOut', 'Шина → наниты: storage bus Extract Only + IO Port, ячейку двигает Transposer', '#3fd0d0'],
+  ['nanIn',  'Наниты → шина Матрицы: фейковый крафт «нанит→нанит», Dual Interface → ME Interface сети шины → storage bus', '#3fd0d0'],
+  ['nanOut', 'Шина → наниты: верхний IO Port в сети шины забирает её содержимое в ячейку, Transposer → нижний IO Port → подсеть', '#3fd0d0'],
   ['output', 'Узлы → основная сеть: Output Bus (ME) → белые коннекторы → хаб, CPU закрывает крафт', '#f2f2f2'],
   ['back',   'Input → Pending: пустая ячейка возвращается, детектор предметов → Redstone I/O', '#d24fd8']];
 const flowOn = {
@@ -533,13 +533,14 @@ const AE_ROLE = {
   'ME-кабель Input':'Кабель Input-подсети к детали P2P-входа.',
   'Adapter → me_controller (наниты)':'Адаптер OC у контроллера подсети нанитов: сколько нанитов каждого тира на складе, заказ фейкового крафта.',
   'Transposer':'Компонент OC transposer: перекладывает ячейку между двумя IO Port, чтобы вынуть наниты из шины.',
-  'P2P Dual Interface + Fake Crafting Card':'по паттерну «нанит → нанит» на каждый вид нанита (10–12), выход переименован в номер тира (обязательно), Glowstone тоже «1», Neutronium — «2». Blocking Mode вкл.',
+  'Dual Interface + Fake Crafting Card':'по паттерну «нанит → нанит» на каждый вид нанита (10–12), выход переименован в номер тира (обязательно), Glowstone тоже «1», Neutronium — «2». Blocking Mode вкл.',
   'Crafting Storage':'Процессор крафта для фейкового крафта нанитов.', 'Co-Processor':'Ускоряет фейковый крафт.',
-  'Wireless Connector → шина нанитов':'Связывает подсеть нанитов с шиной Матрицы.',
+  'Wireless Connector → шина нанитов':'Сеть шины: связывает её блоки у подсети нанитов с storage bus на шине Матрицы. Сеть отдельная — с подсетью нанитов не соединять.',
+  'ME Interface (сеть шины)':'Приёмник: сюда Dual Interface подсети нанитов отдаёт наниты заказа; в сети шины одно хранилище — шина Матрицы, туда они и уходят. Пустой, без паттернов.',
   'Кабель Pending: Fluid Storage Bus + Quartz Fiber':'Кабель сети Pending с двумя деталями. Fluid Storage Bus (Insert Only) смотрит в Fluid Interface подсети: всё жидкое, что пришло в Pending с заказом, Pending может только положить в подсеть, но не забрать обратно. Quartz Fiber отдаёт подсети питание без каналов — своего контроллера и питания у подсети нет.',
   'ME Fluid Interface (подсеть энтанглера)':'Вход подсети: storage bus работает только по интерфейсу (Interface / Fluid Interface / Dual), не по ME Drive. Внутрь ничего не кладём.',
   'Wireless Connector ← Pending':'Приёмник жидкостей заказа от Pending.',
-  'Wireless Connector + Storage Bus (двусторонний)':'Двусторонний storage bus на Nanite Containment Bus: шина становится хранилищем подсети нанитов.',
+  'Wireless Connector + Storage Bus (двусторонний)':'Storage bus Read/Write на Nanite Containment Bus — единственное хранилище маленькой сети шины. Класть в шину и забирать из неё — только через него: когда у шины есть ME-подключение, GT может закрыть прямой доступ (Dual Interface вплотную не положит).',
   'Wireless Connector → Input':'Пурпурный коннектор: Advanced Stocking Input Bus узла видит Input-подсеть (refresh 5 тиков).',
   'Wireless Connector → Mainnet':'Белый коннектор: Output Bus (ME) узла сдаёт результат в основную сеть.'};
 const AE_COMP = {'Adapter → fluid_interface (копии паттернов)':'fluid_interface (getInterfacePattern(слот 1..36))', 'Adapter → me_interface (Input)':'me_interface (getItemsInNetwork) — единственный в сборке', 'Adapter → me_controller (наниты)':'me_controller', 'Transposer':'transposer', 'Redstone I/O':'redstone'};
@@ -550,7 +551,7 @@ function ovlMat(base, ovl){ const k = 'ovl'+base+ovl; return matCache[k] || (mat
 // rows: [что, значение]; slots: ячейки в ЭТОМ диске {n, of, label}
 const SUPER = ['Карты', '3× Superluminal Acceleration Card'], IOMODE = ['Режим', 'Move to output when cell/network is empty'];
 function FILL0(name, sub, w){
-  const P = sub.startsWith('Pending'), I = sub.startsWith('Input'), E = sub.startsWith('Подсеть энтанглера'), N = sub.startsWith('Наниты');
+  const P = sub.startsWith('Pending'), I = sub.startsWith('Input'), E = sub.startsWith('Подсеть энтанглера'), N = sub.startsWith('Наниты') || sub.startsWith('Сеть шины');
   switch (name) {
     case 'Dual Interface (mainnet)': return {rows:[['Паттерны', 'паттерны BEC — умноженные на размер партии K (вход: исходные жидкости и предметы, выход: продукт узла). Клик по паттерну в окне ниже — что в нём закодировано'], ['Карты', 'Pattern Capacity Card — по числу паттернов (каждая +9 слотов)'], ['Блокировка', 'Blocking Mode: вкл. («Do not push crafting items if inventory contains items»)'], ['Режим цели', 'Loose Mode: блокировать, пока в Pending есть хоть один предмет — партии не смешаются'], ['Сторона', 'ключом развернуть в Pending']]};
     case 'Dual Interface (копия)': return {rows:[['Паттерны', 'те же паттерны в тех же слотах, но НЕ умноженные (×1); удобно копировать Matter Manipulator'], ['Сеть', 'не подключать к AE — рядом только адаптер OC'], ['Правило', 'новый паттерн — в оба интерфейса']]};
@@ -564,10 +565,11 @@ function FILL0(name, sub, w){
     case 'ME Interface': return {rows:[['Содержимое', 'ничего. Обычный (не Dual) интерфейс: через адаптер программа видит, что пришло в Input']]};
     case 'Кабель Pending: Fluid Storage Bus + Quartz Fiber': return {rows:[['Fluid Storage Bus', 'Insert Only, лицом в Fluid Interface подсети; приоритет по умолчанию'], ['Quartz Fiber', 'на грань к ME Drive подсети: питание без каналов'], ['Кабель', 'чёрный (Pending), к беспроводному коннектору от Pending']]};
     case 'ME Fluid Interface (подсеть энтанглера)': return {rows:[['Содержимое', 'ничего: интерфейс нужен только как «окно» подсети для storage bus'], ['Можно', 'Dual Interface вместо Fluid Interface']]};
-    case 'P2P Dual Interface + Fake Crafting Card': return {rows:[['Карты', 'Fake Crafting Card'], ['Блокировка', 'Blocking Mode: вкл.'], ['Паттерны', 'по одному «нанит → нанит» на каждый вид нанита (10–12); выход переименован в номер тира: «1» … «10» (обязательно: «X → X» AE не крафтит), Glowstone тоже «1», Neutronium — «2»; вход не переименовывать'], ['Размер', 'нанитов этого тира / число Матриц: 30 720 при одной Матрице']]};
+    case 'Dual Interface + Fake Crafting Card': return {rows:[['Карты', 'Fake Crafting Card'], ['Блокировка', 'Blocking Mode: вкл.'], ['Паттерны', 'по одному «нанит → нанит» на каждый вид нанита (10–12); выход переименован в номер тира: «1» … «10» (обязательно: «X → X» AE не крафтит), Glowstone тоже «1», Neutronium — «2»; вход не переименовывать'], ['Размер', 'нанитов этого тира / число Матриц: 30 720 при одной Матрице']]};
     case 'Crafting Storage': return {rows:[['Назначение', 'CPU для фейкового крафта нанитов; хватит любого объёма']]};
     case 'Co-Processor': return {rows:[['Назначение', 'вместе с Crafting Storage — CPU подсети нанитов']]};
-    case 'Wireless Connector + Storage Bus (двусторонний)': return {rows:[['Storage bus', 'Bidirectional на Nanite Containment Bus Матрицы']]};
+    case 'Wireless Connector + Storage Bus (двусторонний)': return {rows:[['Storage bus', 'Read/Write (двусторонний) на Nanite Containment Bus Матрицы'], ['Сеть', 'отдельная сеть шины: этот storage bus, ME Interface (приём), верхний IO Port, питание (Quartz Fiber); контроллер не нужен'], ['Нельзя', 'соединять с подсетью нанитов — иначе извлечение заберёт и её запас']]};
+    case 'ME Interface (сеть шины)': return {rows:[['Содержимое', 'пусто: ни паттернов, ни конфигурации'], ['Сеть', 'сеть шины'], ['Сосед', 'снизу — Dual Interface подсети нанитов стрелкой сюда (повёрнутая грань сети не соединяет)']]};
     case 'ME IO Port': {
       if (P) return {rows:[SUPER, IOMODE, ['Направление', 'из сети в ячейку: забирает всю партию из Pending в ячейку'], ['Сеть', 'Pending (касается его коннектора)']]};
       if (I) return {rows:[SUPER, IOMODE, ['Направление', 'из ячейки в сеть: выгружает ячейку в Input'], ['Ячейка', '16384k Item Cell — положить сюда при постройке (для Врат — Artificial Universe cell: предметов больше)'], ['Сеть', 'Input (пурпурный коннектор сверху → хаб Input)']]};
@@ -587,7 +589,7 @@ function FILL0(name, sub, w){
 }
 // GUI-макеты (как в игре): ME Drive, интерфейсы, IO Port
 function GUI(name, sub, w){
-  const P = sub.startsWith('Pending'), I = sub.startsWith('Input'), E = sub.startsWith('Подсеть энтанглера'), N = sub.startsWith('Наниты');
+  const P = sub.startsWith('Pending'), I = sub.startsWith('Input'), E = sub.startsWith('Подсеть энтанглера'), N = sub.startsWith('Наниты') || sub.startsWith('Сеть шины');
   const cell = (icon, label, tip, cls) => ({icon, label, tip, cls});
   switch (name) {
     case 'ME Drive': {
@@ -607,7 +609,7 @@ function GUI(name, sub, w){
         btns:copy ? ['не в сети AE', 'рядом адаптер'] : ['Blocking Mode: вкл.', 'Loose Mode', 'ключом → Pending'],
         note:`интерфейс ${idx + 1} из 4: рецепты ${idx*per + 1}–${Math.min(RECIPES.length, idx*per + per)} из ${RECIPES.length}. Клик по паттерну — что в нём`};
     }
-    case 'P2P Dual Interface + Fake Crafting Card': return {type:'iface', title:'P2P Dual Interface', mult:1, pats:Array.from({length:10}, (_, i) => ({icon:'AEI_Pattern', label:String(i+1), tip:`нанит тира ${i+1}`, nan:i+1})), cards:[cell('AEI_CardFake', '', 'Fake Crafting Card'), cell('AEI_CardPatternCapacity', '', 'Pattern Capacity Card: +9 слотов')], btns:['Blocking Mode: вкл.'], note:'клик по паттерну — что в нём'};
+    case 'Dual Interface + Fake Crafting Card': return {type:'iface', title:'Dual Interface', mult:1, pats:Array.from({length:10}, (_, i) => ({icon:'AEI_Pattern', label:String(i+1), tip:`нанит тира ${i+1}`, nan:i+1})), cards:[cell('AEI_CardFake', '', 'Fake Crafting Card'), cell('AEI_CardPatternCapacity', '', 'Pattern Capacity Card: +9 слотов')], btns:['Blocking Mode: вкл.'], note:'клик по паттерну — что в нём'};
     case 'ME Interface (приём, Pending)': return {type:'iface', title:'ME Interface (приём)', pats:[], cards:[], btns:[], note:'пустой: всё пришедшее уходит в сеть Pending'};
     case 'ME Interface': return {type:'iface', title:'ME Interface', pats:[], cards:[], btns:[], note:'пустой: адаптер только читает сеть Input'};
     case 'ME Fluid Interface (подсеть энтанглера)': return {type:'iface', title:'ME Fluid Interface', pats:[], cards:[], btns:[], note:'пустой: «окно» подсети для storage bus'};
@@ -795,10 +797,15 @@ function buildAE(){
   aeBox([-20,0,9], HUB.magenta, null, null, null, 'Wireless Hub (OC P2P к затвору, полю, энтанглеру, Матрице)');
   // Наниты (бирюзовая)
   AE_SUB = 'Наниты (бирюзовая)';
-  aeBox([-16,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); aeBox([-16,1,9], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → me_controller (наниты)'); IOP([-15,0,9]); aeBox([-15,1,9], 'OC_TransposerSide', 'OC_TransposerTop', null, null, 'Transposer'); IOP([-15,2,9]);
-  DRIVE([-14,0,9]); aeBox([-14,1,9], 'FC_fluid_interface', null, null, null, 'P2P Dual Interface + Fake Crafting Card');
+  aeBox([-16,0,9], 'AE_BlockControllerPowered', null, null, null, 'ME Controller'); aeBox([-16,1,9], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → me_controller (наниты)'); IOP([-15,0,9]); aeBox([-15,1,9], 'OC_TransposerSide', 'OC_TransposerTop', null, null, 'Transposer');
+  // Dual Interface повёрнут ключом вверх, в ME Interface сети шины: повёрнутая грань сети не соединяет
+  const DIR_PY = {py:'FC_fluid_interface', ny:'AE_BlockInterfaceAlternate', px:'AE_BlockInterfaceAlternateArrow', nx:'AE_BlockInterfaceAlternateArrow', pz:'AE_BlockInterfaceAlternateArrow', nz:'AE_BlockInterfaceAlternateArrow'};
+  DRIVE([-14,0,9]); aeBox([-14,1,9], 'AE_BlockInterfaceAlternate', null, null, DIR_PY, 'Dual Interface + Fake Crafting Card');
   aeBox([-13,0,9], 'AE_BlockCraftingStorage16384k', null, null, null, 'Crafting Storage'); aeBox([-13,1,9], 'AE_BlockCraftingAccelerator', null, null, null, 'Co-Processor');
-  aeBox([-12,0,9], WL.cyan, null, null, null, 'Wireless Connector → шина нанитов');
+  // Сеть шины — отдельная: верхний IO Port, приёмный ME Interface, коннектор к storage bus на шине Матрицы
+  AE_SUB = 'Сеть шины нанитов (отдельная)';
+  IOP([-15,2,9]); aeBox([-14,2,9], 'AE_BlockInterface', null, null, null, 'ME Interface (сеть шины)');
+  aeBox([-14,3,9], WL.cyan, null, null, null, 'Wireless Connector → шина нанитов');
   AE_SUB = 'Подсеть энтанглера';
   // подсеть энтанглера: у входного шлюза (Advanced Stocking Input Hatch)
   const gen = PL.find(p => p.id === 'gen'), gi = SPEC.BEC_GENERATOR.find(e => e.k === 'inhatch');
@@ -815,10 +822,10 @@ function buildAE(){
   AE_SUB = 'Подсеть энтанглера';
   aeLink([-31,0,9], e3, 0x9aa0aa, 'fluids');
   // storage bus на шине нанитов Матрицы
-  AE_SUB = 'Наниты (бирюзовая)';
+  AE_SUB = 'Сеть шины нанитов (отдельная)';
   const asm = asmP(), ni = SPEC.BEC_ASSEMBLER.find(e => e.k === 'nanite'), nW = add3(asm.toW(ni.p), asm.dirW(DIRL[ni.f]));
   aeBox(nW, WL.cyan, null, null, null, 'Wireless Connector + Storage Bus (двусторонний)');
-  aeLink([-12,0,9], nW, 0x3fd0d0, 'nanIn'); aePath([V3(nW), V3([-12,0,9])], 'nanOut', 0x3fd0d0);
+  aeLink([-14,3,9], nW, 0x3fd0d0, 'nanIn'); aePath([V3(nW), V3([-14,3,9])], 'nanOut', 0x3fd0d0);
   AE_SUB = 'Input / Mainnet';
   // узлы: пурпурный коннектор у Advanced Stocking Input Bus, белый — у Output Bus (ME)
   const mainC = [-30, 0, 12];
@@ -850,9 +857,9 @@ function buildAE(){
   aeLink([-35,0,12], e2, 0x777777, null);
   aePath([V3([-29,1,9]), V3([-24,0,9])], 'shuttle', 0xd24fd8);
   aePath([V3([-24,0,9]), V3([-29,1,9])], 'back', 0xd24fd8);
-  AE_POS = {mainnet:[-33,2.6,12.5], main:[-32.5,1.6,7], pend:[-31,1.8,9.5], input:[-22,2.6,9.5], nan:[-14,3.4,9.5], ent:add3(e2,[.5,1.6,.5]), nbus:add3(nW,[.5,1.6,.5])};
+  AE_POS = {mainnet:[-33,2.6,12.5], main:[-32.5,1.6,7], pend:[-31,1.8,9.5], input:[-22,2.6,9.5], nan:[-15.5,2.6,9.5], ent:add3(e2,[.5,1.6,.5]), nbus:add3(nW,[.5,1.6,.5])};
   label('Основная сеть', AE_POS.mainnet, '', 'ae'); label('Паттерны (Dual Interface)', AE_POS.main, '', 'ae'); label('доливка запаса — ?', [(-35+e2[0])/2, 2, (12+e2[2])/2], '', 'ae'); label('Pending', AE_POS.pend, '', 'ae'); label('Input', AE_POS.input, '', 'ae');
-  label('Наниты', AE_POS.nan, '', 'ae'); label('Подсеть энтанглера', AE_POS.ent, '', 'ae'); label('Storage bus на шине нанитов', AE_POS.nbus, '', 'ae');
+  label('Наниты', AE_POS.nan, '', 'ae'); label('Подсеть энтанглера', AE_POS.ent, '', 'ae'); label('Storage bus на шине нанитов', AE_POS.nbus, '', 'ae'); label('Сеть шины (отдельная)', [-14,4.4,9.5], '', 'ae');
 }
 function aeStep(dt){
   for (const f of AE_FLOWS) {
@@ -941,7 +948,7 @@ const STEPS = [
   {t:'AE2 · Pending и челнок', show:'all', cam:()=>[[-31,1,8], 26, [.35,.55,.75]], note:()=>`<p><b>Mainnet</b>: Dual Interface с <b>умноженными</b> паттернами BEC (вход — исходные жидкости, не запутанные), Blocking Mode вкл. + Loose Mode, ключом повернуть в Pending. Перед лицом каждого — <b>приёмный ME Interface сети Pending</b> (пустой): Dual Interface выталкивает только в инвентарь перед лицом, в ME Drive или контроллер — нельзя (диск — инвентарь ячеек, задача висит «Scheduled · Blocking Mode»). Повёрнутая грань связь не пропускает — сети не сливаются. Через блок от них — такие же Dual Interface <b>не в сети</b> с <b>немножёнными</b> копиями и адаптерами OC: по ним программа считает число копий.</p><p><b>Pending</b> (чёрная): ME Controller, 2 ME Drive, беспроводной коннектор к энтанглеру, 2 IO Port (3× Superluminal Acceleration Card, «Move to output when cell/network is empty»), 2 корпуса машины с конвейерами UEV и Machine Controller cover, Redstone I/O на красном сплаве.</p><p><b>Челнок</b>: нижний IO Port в Pending — <i>из сети в ячейку</i>, верхний — в Input (пурпурный коннектор сверху) — <i>из ячейки в сеть</i>; ячейка 16384k (для Врат — Artificial Universe) ходит между ними по кругу через 2 корпуса: <b>«вперёд»</b> стоит над IO Port Pending — конвейер снизу забирает полную ячейку, конвейер сбоку кладёт её в IO Port Input (без сигнала); <b>«возврат»</b> стоит под IO Port Input — конвейер сверху забирает пустую ячейку, конвейер сбоку кладёт в IO Port Pending, Machine Controller cover лицом в Redstone I/O (только по импульсу). Так партия переезжает в Input целиком и отдельно от следующей.</p><p><b>«Звонок»</b>: отдельный корпус с Item Detector cover лицом в Redstone I/O. В него смотрит Storage Bus — <b>деталь</b> на кабеле Input (рядом со входом P2P), Bidirectional, приоритет 1000. При выгрузке первые предметы ложатся в корпус, детектор даёт сигнал — программа узнаёт, что партия пришла.</p>`},
   {t:'AE2 · Input → узлы', show:'all', cam:()=>[[-10,8,4], 70, [.55,.5,.75]], note:()=>`<p><b>Input</b> (пурпурная): ME Controller, обычный (не Dual) ME Interface + адаптер, 2 ME Drive, 4 беспроводных хаба для узлов + 1 хаб для OC P2P к затвору, полю, энтанглеру, Матрице.</p><p>На каждом узле: пурпурный коннектор → <b>Advanced Stocking Input Bus</b> (включить, refresh 5 тиков), белый коннектор → <b>Output Bus (ME)</b> в Mainnet. Коннекторы узлов делить поровну между 4 хабами.</p><p>Корпус со storage bus на Input (высокий приоритет) и Item Detector cover → Redstone I/O: сигнал «ячейка пуста».</p>`},
   {t:'AE2 · подсеть энтанглера', show:'all', cam:()=>[add3(AE_POS.ent,[0,-1,0]), 28, [.6,.5,.7]], note:()=>`<p>Подсеть энтанглера — без контроллера: <b>Advanced Stocking Input Hatch</b> энтанглера + <b>ME Fluid Interface</b> + 2 ME Drive (жидкостные ячейки). Хетч видит только её.</p><p>Связь с Pending — не кабелем, а деталями на <b>чёрном кабеле Pending</b> (от беспроводного коннектора Pending): <b>Fluid Storage Bus</b> (деталь, Insert Only) лицом в Fluid Interface и <b>Quartz Fiber</b> (деталь) в ME Drive — питание без каналов. Грани с деталями сети не соединяют.</p><p>Как это работает: заказ кладёт в Pending предметы и жидкости. У дисков Pending — только предметные ячейки, поэтому жидкости уходят единственным путём — через storage bus в подсеть, и обратно (Insert Only) не возвращаются.</p><p>Основная сеть сюда <b>не подключается</b>: энтанглер запутает всё, что видит. Запас (passive) — класть в эту подсеть порциями (DESIGN.md §1.2a).</p>`},
-  {t:'AE2 · наниты', show:'all', cam:()=>[[-14,1,9], 26, [.45,.55,.75]], note:()=>`<p><b>Наниты</b> (бирюзовая, свой цвет кабеля!): Neutronium ME Controller + адаптер, 2 IO Port с Transposer между ними, ME Drive с ячейкой: фильтр на 10 нанитов BEC, Equal Distribution Card, Types = 10, объём = 307 200 × число Матриц. Crafting Storage + Co-Processor, Energy Anchor.</p><p>P2P <b>Dual</b> Interface (Blocking Mode вкл.) + Fake Crafting Card, по паттерну «нанит → нанит» на вид нанита, выход переименован в номер тира («1»…«10»; без этого AE считает паттерн «X → X» пустым), размер паттерна = нанитов этого тира / число Матриц (30 720 для одной).</p><p>Беспроводной коннектор → <b>двусторонний storage bus на Nanite Containment Bus</b> Матрицы; сверху — storage bus Extract Only к IO Port.</p>`},
+  {t:'AE2 · наниты', show:'all', cam:()=>[[-14,1,9], 26, [.45,.55,.75]], note:()=>`<p><b>Наниты</b> (бирюзовая, свой цвет кабеля!): Neutronium ME Controller + адаптер, 2 IO Port с Transposer между ними, ME Drive с ячейкой: фильтр на 10 нанитов BEC, Equal Distribution Card, Types = 10, объём = 307 200 × число Матриц. Crafting Storage + Co-Processor, Energy Anchor.</p><p><b>Dual</b> Interface (Blocking Mode вкл.) + Fake Crafting Card, повёрнут ключом вверх — в приёмный ME Interface сети шины; по паттерну «нанит → нанит» на вид нанита, выход переименован в номер тира («1»…«10»; без этого AE считает паттерн «X → X» пустым), размер паттерна = нанитов этого тира / число Матриц (30 720 для одной).</p><p><b>Сеть шины — отдельная</b> (с подсетью нанитов не соединять!): верхний IO Port (с меткой), приёмный ME Interface, беспроводной коннектор → <b>storage bus Read/Write на Nanite Containment Bus</b>, питание — Quartz Fiber от любой запитанной сети, контроллер не нужен. Шина — единственное хранилище этой сети: заказанные наниты уходят в неё, а верхний IO Port забирает при извлечении только её содержимое. Напрямую Dual Interface в шину не положит: при ME-подключении GT может закрыть к ней доступ (проверено в игре).</p>`},
   {t:'AE2 · что куда вставить', show:'all', cam:()=>[[-24,1,9], 30, [.3,.6,.75]], note:()=>`<table class="fillt"><tr><th>Где</th><th>Что</th></tr>
 <tr><td>Mainnet · Dual Interface</td><td>паттерны BEC <b>умноженные</b>; Blocking Mode вкл. + Loose Mode; ключом в Pending</td></tr>
 <tr><td>Pending · ME Interface ×4 (приём)</td><td>пустые; перед лицом каждого Dual Interface основной сети. В диск/контроллер Dual Interface выталкивать не может</td></tr>
@@ -955,8 +962,10 @@ const STEPS = [
 <tr><td>Энтанглер · 2 ME Drive</td><td>20 × Fluid Digital Singularity</td></tr>
 <tr><td>Энтанглер · связь с Pending</td><td>на чёрном кабеле Pending: Fluid Storage Bus (Insert Only) лицом в ME Fluid Interface подсети + Quartz Fiber в ME Drive (питание)</td></tr>
 <tr><td>Наниты · ME Drive</td><td>1 × 16384k Item Cell: partition на все виды нанитов (до 12), Equal Distribution Card, Types — по числу видов, Resource Amount 307 200 × Матриц</td></tr>
-<tr><td>Наниты · 2 IO Port</td><td>по 3 × Superluminal; в верхний — пустая ячейка-пустышка (обязательно)</td></tr>
-<tr><td>Наниты · P2P Dual Interface</td><td>Fake Crafting Card, Blocking Mode вкл.; по паттерну «нанит → нанит» на вид нанита, выход переименован в номер тира «1»…«10» (Glowstone — «1», Neutronium — «2»; без переименования AE не крафтит «X → X»), размер 30 720 / Матриц</td></tr>
+<tr><td>Наниты · 2 IO Port</td><td>по 3 × Superluminal, «Move to output when work is done»; нижний (подсеть нанитов) — Transfer data to network, рабочая ячейка 16k+ в выходе 7; верхний (сеть шины) — Transfer data to storage cell, метка в выходе 8…12</td></tr>
+<tr><td>Сеть шины · ME Interface</td><td>пусто; снизу в него смотрит Dual Interface подсети нанитов</td></tr>
+<tr><td>Сеть шины · storage bus</td><td>Read/Write, на Nanite Containment Bus; питание сети — Quartz Fiber</td></tr>
+<tr><td>Наниты · Dual Interface</td><td>Fake Crafting Card, Blocking Mode вкл., ключом стрелкой в ME Interface сети шины; по паттерну «нанит → нанит» на вид нанита, выход переименован в номер тира «1»…«10» (Glowstone — «1», Neutronium — «2»; без переименования AE не крафтит «X → X»), размер 30 720 / Матриц</td></tr>
 <tr><td>Наниты · CPU</td><td>Crafting Storage + Co-Processor</td></tr>
 <tr><td>Узел · Advanced Stocking Input Bus</td><td>авто-пополнение, refresh 5 тиков</td></tr>
 <tr><td>Узел · люк контроллера</td><td>Pause Immediately (по умолчанию), без схемы</td></tr></table><p class="small">Кликни по блоку — то же в его карточке; у дисков показаны слоты. Источник — Armisael5/gtnh-bec-controller.</p>`}
