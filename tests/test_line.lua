@@ -236,7 +236,7 @@ S["паттерн нанитов есть, запаса нет — E-TIER с п�
     return line.st.phase == "FAULT"
   end, 2000)
   T.eq(line.st.phase, "FAULT")
-  T.ok(logText(d):find("в подсети 0, паттерн на 64"), logText(d))
+  T.ok(logText(d):find("тир 4: в подсети 0, паттерн на 64"), logText(d))
 end
 
 return S
