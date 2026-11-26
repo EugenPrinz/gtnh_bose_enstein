@@ -106,6 +106,43 @@ function M.maxTier(r)
   return m
 end
 
+-- Опознать рецепт по предметам паттерна {{label, size}} (одна копия): тот же набор количеств и большинство
+-- совпавших названий (сравниваются буквы/цифры без регистра; названия в data — из исходников, в игре могут
+-- чуть отличаться: «Sensor UHV» ↔ «Sensor (UHV)»). Единственный лучший → рецепт; иначе nil, причина.
+local function norm(s) return (tostring(s or ""):lower():gsub("[^%w]", "")) end
+M.norm = norm
+function M.matchItems(items)
+  local n = #items
+  local function sizes(list, f)
+    local t = {}
+    for _, e in ipairs(list) do t[#t + 1] = f(e) end
+    table.sort(t)
+    return table.concat(t, ",")
+  end
+  local want = sizes(items, function(e) return e[2] end)
+  local best, bestScore, tie = nil, -1, false
+  for _, r in ipairs(data.recipes) do
+    if #r.items == n and sizes(r.items, function(e) return e[2] end) == want then
+      local score, used = 0, {}
+      for _, e in ipairs(items) do
+        local a = norm(e[1])
+        for j, q in ipairs(r.items) do
+          local b = norm(q[1])
+          if not used[j] and q[2] == e[2] and #a > 0 and (a == b or a:find(b, 1, true) or b:find(a, 1, true)) then
+            used[j] = true; score = score + 1; break
+          end
+        end
+      end
+      if score > bestScore then best, bestScore, tie = r, score, false
+      elseif score == bestScore then tie = true end
+    end
+  end
+  if not best then return nil, "нет рецепта BEC с таким набором предметов" end
+  if tie then return nil, "предметы подходят к нескольким рецептам BEC" end
+  if bestScore * 2 < n then return nil, "рецепт не опознан по названиям предметов (похож на «" .. best.name .. "»)" end
+  return best
+end
+
 function M.byName(name)
   for _, r in ipairs(data.recipes) do
     if r.name == name then return r end

@@ -130,7 +130,7 @@ function L:p_IDENTIFY()
   self.st.batch = b
   self.st.t0 = self.d.now()
   self.warned = {}
-  self.log:info(string.format("партия: %s ×%d", b.name, b.copies))
+  self.log:info(string.format("партия: %s ×%d (конденсат: %s)", b.name, b.copies, b.src or "паттерн"))
   self:go("PLAN")
 end
 

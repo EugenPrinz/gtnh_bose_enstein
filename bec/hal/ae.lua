@@ -90,7 +90,19 @@ function A:identify(stock)
         end
         if unknown then return nil, "жидкость паттерна не знакома: " .. unknown end
         local o = pat.outputs and pat.outputs[1] or {}
-        return {name = o.label or o.name or "?", copies = n, out = (o.size or 1) * n, fluids = fl}
+        local src = "паттерн"
+        if not next(fl) then
+          -- в копии нет жидкостей (конденсат запасён заранее) — потребность из таблицы рецептов
+          local items = {}
+          for _, e in pairs(pat.inputs) do
+            if not isFluid(e) then items[#items + 1] = {e.label or e.name, e.size or 1} end
+          end
+          local r, why = recipe.matchItems(items)
+          if not r then return nil, "в копии нет жидкостей, а " .. why end
+          for t, a in pairs(r.cond) do fl[t] = a end
+          src = "таблица: " .. r.name
+        end
+        return {name = o.label or o.name or "?", copies = n, out = (o.size or 1) * n, fluids = fl, src = src}
       end
     end
   end

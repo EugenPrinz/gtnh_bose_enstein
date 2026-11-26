@@ -21,10 +21,10 @@ local SENSOR = {
   nanites = {[1] = 30720, [4] = 64, [10] = 30720},
 }
 
-local function setup(nodes, field)
+local function setup(nodes, field, pat)
   local w = World.new({fieldStrength = field or 1000, assemblerEu = 1 << 40, entanglerEu = 1 << 40, nodes = nodes})
   w.storage:tick()
-  local f = Fake.new(w):line():ae(SENSOR)
+  local f = Fake.new(w):line():ae(pat or SENSOR)
   local saved
   local d = {component = f:api(), cfg = config.load(), layout = nil,
     sleep = function(s) f:run(math.max(1, math.floor(s * 20 + 0.5))) end,
@@ -194,6 +194,34 @@ S["поле вручную: поднять всегда, опустить тол
   ui:draw(line:view())
   T.ok(g.text():find("Напряжённость поля, L"))
   T.ok(ui:key(nil, 1) == "cancel" and ui.input == nil)
+end
+
+S["копия без жидкостей: конденсат из таблицы рецептов, запас в Поле заранее"] = function()
+  local dry = {}
+  for k, v in pairs(SENSOR) do dry[k] = v end
+  dry.fluids = {}
+  local w, f, d = setup(1, 10000, dry)
+  fill(w, 1) -- запас лежит до заказа
+  local line = Line.new(d)
+  line:init()
+  f:batch(dry, 1)
+  T.ok(runUntil(line, f, function() return f.pulses > 0 and line.st.phase == "IDLE" end), logText(d))
+  T.eq(w.nodes[1].completed, 1)
+  T.ok(logText(d):find("таблица: Meta Material Sensor Array 1"), logText(d))
+end
+
+S["копия без жидкостей и чужие предметы — E-BATCH с причиной"] = function()
+  local odd = {}
+  for k, v in pairs(SENSOR) do odd[k] = v end
+  odd.fluids = {}
+  odd.items = {{name = "minecraft:stone", damage = 0, label = "Stone", size = 3}}
+  local w, f, d = setup(1, 1000, odd)
+  local line = Line.new(d)
+  line:init()
+  f:batch(odd, 1)
+  runUntil(line, f, function() return line.st.phase == "FAULT" end, 50)
+  T.eq(line.st.err.code, "E-BATCH")
+  T.ok(line.st.err.msg:find("нет жидкостей"), line.st.err.msg)
 end
 
 return S
