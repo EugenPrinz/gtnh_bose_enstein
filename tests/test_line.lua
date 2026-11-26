@@ -285,4 +285,16 @@ S["Матрица выключена — программа включает е�
   require("ui").new(g):draw(line:view())
 end
 
+S["старая ошибка из файла состояния не висит после перезапуска"] = function()
+  local w, f, d = setup(1)
+  d.load = function() return {phase = "RUN", err = {code = "E-TIER", msg = "старое"}} end
+  local line = Line.new(d)
+  line:init()
+  T.eq(line.st.err, nil)
+  line:fault("E-X", "новая")
+  T.eq(line.st.err.code, "E-X")
+  line:go("IDLE")
+  T.eq(line.st.err, nil)
+end
+
 return S

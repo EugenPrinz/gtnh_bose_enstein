@@ -1,10 +1,10 @@
 -- Генерируется tools/release.py — не править руками.
 return {
-  version = "0.3.2", date = "2026-11-26",
+  version = "0.3.3", date = "2026-11-26",
   files = {
     {"becctl.lua", 4904},
     {"config.lua", 2072},
-    {"line.lua", 20803},
+    {"line.lua", 20958},
     {"log.lua", 1122},
     {"main.lua", 6226},
     {"ui.lua", 12330},

@@ -23,6 +23,7 @@ function L.new(d)
   self.nan = Nanites.new(d.component)
   self.st = (d.load and d.load()) or {}
   self.st.phase = self.st.phase or "IDLE"
+  if self.st.phase ~= "FAULT" then self.st.err = nil end
   self.warned = {}
   return self
 end
@@ -30,6 +31,7 @@ end
 function L:save() if self.d.save then self.d.save(self.st) end end
 
 function L:go(phase)
+  if phase ~= "FAULT" then self.st.err = nil end -- ошибка висит только в FAULT
   if self.st.phase ~= phase then
     self.st.phase = phase
     self.st.since = self.d.now()
