@@ -2,6 +2,11 @@
 
 ## Не выпущено
 
+### 2026-11-26 — направление Dual Interface
+- 3D: Dual Interface основной сети нарисованы повёрнутыми ключом в Pending, как в игре: лицо — к Pending,
+  тыл — `BlockInterfaceAlternate`, по бокам и сверху стрелки (`BlockInterfaceAlternateArrow`) к Pending.
+  `rotMat` — повёрнутая текстура. Найдено: `recipes_all.json` неполный (28 из ~70 рецептов BEC) — см. план.
+
 ### 2026-11-26 — конвейеры челнока
 - 3D: корпуса челнока разделены на «вперёд» (над IO Port Pending) и «возврат» (под IO Port Input); конвейеры
   нарисованы на гранях к IO Port, Machine Controller cover — на грани к Redstone I/O. Потоки ячейки по кругу.

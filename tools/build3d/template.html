@@ -535,6 +535,8 @@ const AE_ROLE = {
   'Wireless Connector → Input':'Пурпурный коннектор: Advanced Stocking Input Bus узла видит Input-подсеть (refresh 5 тиков).',
   'Wireless Connector → Mainnet':'Белый коннектор: Output Bus (ME) узла сдаёт результат в основную сеть.'};
 const AE_COMP = {'Adapter → me_interface (копии паттернов)':'me_interface', 'Adapter → me_interface (Input)':'me_interface', 'Adapter → me_controller (наниты)':'me_controller', 'Transposer':'transposer', 'Redstone I/O':'redstone'};
+// текстура, повёрнутая на q четвертей по часовой (стрелки направления)
+function rotMat(n, q){ const k = 'rot'+n+q; if (matCache[k]) return matCache[k]; const im = IMG[n], c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.translate(c.width/2, c.height/2); g.rotate(q*Math.PI/2); g.drawImage(im, -im.width/2, -im.height/2); return matCache[k] = new THREE.MeshLambertMaterial({map:mkTex(c)}); }
 function ovlMat(base, ovl){ const k = 'ovl'+base+ovl; return matCache[k] || (matCache[k] = new THREE.MeshLambertMaterial({map:mkTex(composite(base, [[ovl]]))})); }
 // ---------- что вставить / как настроить (Armisael5/gtnh-bec-controller + DESIGN.md) ----------
 // rows: [что, значение]; slots: ячейки в ЭТОМ диске {n, of, label}
@@ -710,7 +712,9 @@ function buildAE(){
   for (let i = 0; i < 4; i++) aeCable([-36,0,12], [-34+i,0,8], 0xf2f2f2);
   aeCable([-36,0,12], [-30,0,12], 0xf2f2f2);
   // Mainnet: Dual Interface с умноженными паттернами, повёрнуты ключом в Pending
-  for (let i = 0; i < 4; i++) aeBox([-34+i, 0, 8], 'FC_fluid_interface', null, null, null, 'Dual Interface (mainnet)');
+  // повёрнуты ключом в Pending (+z): лицо — к Pending, тыл — Alternate, по бокам стрелки к Pending
+  const DIR_PZ = {pz:'FC_fluid_interface', nz:'AE_BlockInterfaceAlternate', px:rotMat('AE_BlockInterfaceAlternateArrow', 1), nx:rotMat('AE_BlockInterfaceAlternateArrow', 3), py:rotMat('AE_BlockInterfaceAlternateArrow', 0), ny:rotMat('AE_BlockInterfaceAlternateArrow', 2)};
+  for (let i = 0; i < 4; i++) aeBox([-34+i, 0, 8], 'AE_BlockInterfaceAlternate', null, null, DIR_PZ, 'Dual Interface (mainnet)');
   // копии паттернов без множителя: не в сети, рядом адаптеры OC
   AE_SUB = 'не в сети AE (копии паттернов для OC)';
   for (let i = 0; i < 4; i++) { aeBox([-34+i, 0, 6], 'FC_fluid_interface', null, null, null, 'Dual Interface (копия)'); aeBox([-34+i, 1, 6], 'OC_AdapterSide', 'OC_AdapterTop', null, null, 'Adapter → me_interface (копии паттернов)'); }
