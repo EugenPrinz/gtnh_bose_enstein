@@ -267,7 +267,13 @@ function L:supply(T)
   end
   local stock = self.ae:naniteStock()
   local load, e = strategy.naniteLoad(T, stock, self.cfg.naniteFill)
-  if not load then return nil, e end
+  if not load then
+    -- паттерн могли добавить после старта: перечитать craftables и попробовать ещё раз
+    self.ae.craft = {}
+    stock = self.ae:naniteStock()
+    load, e = strategy.naniteLoad(T, stock, self.cfg.naniteFill)
+    if not load then return nil, e .. " (в подсети нанитов нет паттерна с выходом «" .. T .. "»)" end
+  end
   local jobs = {}
   for _, o in ipairs(load.order) do
     local j, err = self.ae:requestNanites(o[1], o[2])

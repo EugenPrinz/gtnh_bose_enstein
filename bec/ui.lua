@@ -124,47 +124,77 @@ function U:draw(v)
   bx = self:button(bx, 1, v.paused and "Продолжить" or "Пауза", "pause", v.paused and C.warn or C.btn)
   bx = self:button(bx, 1, "Diag", "diag")
   self:button(bx, 1, "Сброс", "reset", v.phase == "FAULT" and C.err or C.btn)
-  -- три машины
-  local w3 = (W - 4) // 3
+  -- энтанглер и затвор
+  local w2 = (W - 3) // 2
   local y = 3
-  self:box(2, y, w3, 6, "Энтанглер", (v.ent and v.ent.active) and C.ok or C.frame)
+  self:box(2, y, w2, 5, "Энтанглер", (v.ent and v.ent.active) and C.ok or C.frame)
   if v.ent then
-    self:put(4, y + 1, v.ent.max > 0 and string.format("цикл %s / %s с", tm(v.ent.cur / 20), tm(v.ent.max / 20)) or "простой", C.text, C.panel)
-    self:bar(4, y + 2, w3 - 4, v.ent.max > 0 and v.ent.cur / v.ent.max or 0)
-    self:put(4, y + 3, "EU " .. (v.ent.cap > 0 and string.format("%d%%", v.ent.eu * 100 // v.ent.cap) or "—"), C.dim, C.panel)
+    self:put(4, y + 1, v.ent.max > 0 and string.format("цикл %s / %s", tm(v.ent.cur / 20), tm(v.ent.max / 20)) or "простой", C.text, C.panel)
+    self:put(2 + w2 - 12, y + 1, "EU " .. (v.ent.cap > 0 and string.format("%3d%%", v.ent.eu * 100 // v.ent.cap) or "—"), C.dim, C.panel)
+    self:bar(4, y + 2, w2 - 4, v.ent.max > 0 and v.ent.cur / v.ent.max or 0)
   end
-  local fx = 3 + w3
-  self:box(fx, y, w3, 6, "Поле удержания", (v.field and v.field.active) and C.ok or C.err)
-  if v.field then
-    local sum = 0
-    for _, a in pairs(v.field.stored) do sum = sum + a end
-    local over = sum > v.field.strength
-    self:put(fx + 2, y + 1, string.format("%s / %s L%s", fmt(sum), fmt(v.field.strength), over and "  РАСПАД" or ""), over and C.err or C.text, C.panel)
-    self:bar(fx + 2, y + 2, w3 - 4, v.field.strength > 0 and sum / v.field.strength or 0, over and C.err or C.bar)
-    local line, n = {}, 0
-    for t, a in pairs(v.field.stored) do
-      n = n + 1
-      if n <= 3 then
-        local need = v.field.need and v.field.need[t]
-        line[#line + 1] = string.format("%s %s%s", t, fmt(a), need and ("/" .. fmt(need)) or "")
-      end
-    end
-    self:put(fx + 2, y + 3, table.concat(line, "  "), C.dim, C.panel)
-    self:put(fx + 2, y + 4, "EU " .. (v.field.cap > 0 and string.format("%d%%", v.field.eu * 100 // v.field.cap) or "—"), C.dim, C.panel)
-    local bx = fx + w3 - 26
-    bx = self:button(bx, y + 4, "Изменить", "field", self.input and C.acc or C.btn)
-    self:button(bx, y + 4, v.field.auto and "Авто: вкл" or "Авто: выкл", "fieldauto", v.field.auto and C.ok or C.btn)
-  end
-  local gx = 4 + 2 * w3
-  self:box(gx, y, W - gx, 6, "Затвор Максвелла", (v.gate and v.gate.active) and C.ok or C.err)
+  local gx = 3 + w2
+  self:box(gx, y, W - gx, 5, "Затвор Максвелла", (v.gate and v.gate.active) and C.ok or C.err)
   if v.gate then
     local f = {}
     for i = 1, 19 do if v.gate.filters[i] then f[#f + 1] = tostring(v.gate.filters[i]) end end
     self:put(gx + 2, y + 1, "маршрут:", C.dim, C.panel)
     self:put(gx + 2, y + 2, #f > 0 and table.concat(f, ", ") or "открыт ВСЁ (нет фильтров!)", #f > 0 and C.text or C.err, C.panel)
   end
+  -- Поле удержания: объём/напряжённость, расход, типы конденсата с потребностью партии
+  y = y + 6
+  if v.field then
+    local fl = v.field
+    local sum, types = 0, {}
+    for t, a in pairs(fl.stored) do sum = sum + a; types[t] = true end
+    for t in pairs(fl.need or {}) do types[t] = true end
+    local list = {}
+    for t in pairs(types) do list[#list + 1] = t end
+    table.sort(list, function(a, b)
+      local na, nb = (fl.need or {})[a] and 1 or 0, (fl.need or {})[b] and 1 or 0
+      if na ~= nb then return na > nb end
+      local sa, sb = fl.stored[a] or 0, fl.stored[b] or 0
+      if sa ~= sb then return sa > sb end
+      return a < b
+    end)
+    local cols = 3
+    local rows = math.max(1, math.ceil(#list / cols))
+    local over = sum > fl.strength
+    self:box(2, y, W - 2, rows + 5, "Поле удержания", not fl.active and C.err or over and C.err or C.ok)
+    local pct = fl.strength > 0 and sum * 100 / fl.strength or 0
+    local ps = pct == 0 and "0 %" or pct < 0.1 and "<0,1 %" or (string.format("%.1f %%", pct):gsub("%.", ","))
+    self:put(4, y + 1, string.format("объём %s L из %s L  (%s)", fmt(sum), fmt(fl.strength), ps), over and C.err or C.text, C.panel)
+    local right = string.format("расход %s EU/t   EU %s", fmt(fl.strength),
+      fl.cap > 0 and string.format("%d%%", fl.eu * 100 // fl.cap) or "—")
+    self:put(W - 2 - ulen(right), y + 1, right, (fl.cap > 0 and fl.eu * 5 < fl.cap) and C.err or C.dim, C.panel)
+    self:bar(4, y + 2, W - 7, fl.strength > 0 and sum / fl.strength or 0, over and C.err or C.bar)
+    local cw = (W - 6) // cols
+    if #list == 0 then self:put(4, y + 3, "пусто", C.dim, C.panel) end
+    for k, t in ipairs(list) do
+      local cx, cy = 4 + ((k - 1) % cols) * cw, y + 3 + (k - 1) // cols
+      local a, need = fl.stored[t] or 0, fl.need and fl.need[t]
+      local col, tail = C.text, ""
+      if need then
+        if a >= need then col, tail = C.ok, "  / " .. fmt(need) .. " ✓"
+        else col, tail = C.warn, "  / " .. fmt(need) .. "  −" .. fmt(need - a) end
+      end
+      self:put(cx, cy, usub(t, 24), need and col or C.dim, C.panel)
+      self:put(cx + 25, cy, fmt(a) .. " L" .. tail, col, C.panel)
+    end
+    local by = y + rows + 3
+    local bx = self:button(4, by, "Изменить напряжённость", "field", self.input and C.acc or C.btn)
+    bx = self:button(bx, by, fl.auto and "Авто: вкл" or "Авто: выкл", "fieldauto", fl.auto and C.ok or C.btn)
+    local note = over and "РАСПАД: объём выше напряжённости, лишнее тает ×0,9 в секунду"
+      or (fl.auto and "авто поднимает до объёма партии ×1,1, вниз не опускает" or "авто выкл: напряжённость только вручную")
+    self:put(bx + 1, by, note, over and C.err or C.dim, C.panel)
+    if not fl.active then self:put(W - 22, by, "Поле НЕ работает", C.err, C.panel) end
+    y = y + rows + 6
+  else
+    self:box(2, y, W - 2, 3, "Поле удержания", C.err)
+    self:put(4, y + 1, "не найдено", C.err, C.panel)
+    y = y + 4
+  end
   -- наниты
-  y = y + 7
   local nt = v.tier and (string.format("T%d %s · %s шт.", v.tier, TIERNAME[v.tier] or "", fmt(v.N))) or "не загружены"
   if v.load and #v.load > 1 then
     local parts = {}
